@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <title>JK-V2RAY | Premium Service</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, addDoc, collection, deleteDoc, increment, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyCLvS9xY6sUTPjk8uf0xUzeD4_UqRLWveI",
+          authDomain: "topup-v2ray.firebaseapp.com",
+          projectId: "topup-v2ray",
+          storageBucket: "topup-v2ray.firebasestorage.app",
+          messagingSenderId: "212562121085",
+          appId: "1:212562121085:web:88b69e4418d0890d973c14"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Telegram Bot Configuration
+        const TG_TOKEN = "8719916377:AAElljRpk4nk9aAJAFGtJ-tjyacw5GdjS80";
+        const TG_CHAT_ID = "7848197948";
+        const ADMIN_PASS = "JueHtet19991";
+
+        let allServers = [];
+        let currentUser = null;
+        window.currentBalance = 0;
+        let isAdminAuthenticated = false;
+        let currentPing = 0;
+
+        async function getDeviceID() {
+            let id = localStorage.getItem('v2_stable_uid');
+            if (!id) {
+                const platform = navigator.platform;
+                const random = Math.floor(Math.random() * 10000);
+                id = `V2-${platform.substring(0,3).toUpperCase()}-${random}-${Date.now().toString().slice(-4)}`;
+                localStorage.setItem('v2_stable_uid', id);
+            }
+            return id;
+        }
+
+        async function measurePing() {
+            const start = Date.now();
+            try {
+                await fetch("https://www.google.com/generate_204", { mode: 'no-cors', cache: 'no-cache' });
+                currentPing = Date.now() - start;
+                const pingDisplay = document.getElementById('live-ping-val');
+                if(pingDisplay) {
+                    pingDisplay.innerText = currentPing + "ms";
+                    pingDisplay.className = currentPing < 100 ? "text-[9px] font-black text-green-400" : 
+                                           currentPing < 250 ? "text-[9px] font-black text-yellow-400" : "text-[9px] font-black text-red-400";
+                }
+            } catch (e) {
+                console.log("Ping failed");
+            }
+        }
+
+        // Send Notification to Telegram
+        async function sendTelegramNotify(uid, amount, slipUrl) {
+            const message = ` *New Topup Request*\n\n` +
+                            ` User ID: \`${uid}\`\n` +
+                            ` Amount: *${amount} THB*\n` +
+                            ` Time: ${new Date().toLocaleString()}\n\n` +
+                            ` Please check admin panel for approval.`;
+            
+            try {
+                // Send Text Message
+                await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        chat_id: TG_CHAT_ID,
+                        text: message,
+                        parse_mode: 'Markdown'
+                    })
+                });
+
+                // Send Slip Photo
+                if (slipUrl && slipUrl.startsWith('data:image')) {
+                    // Convert base64 to Blob to send as file
+                    const base64Data = slipUrl.split(',')[1];
+                    const blob = await fetch(`data:image/png;base64,${base64Data}`).then(res => res.blob());
+                    const formData = new FormData();
+                    formData.append('chat_id', TG_CHAT_ID);
+                    formData.append('photo', blob, 'slip.png');
+                    formData.append('caption', `Receipt from ID: ${uid}`);
+
+                    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendPhoto`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                }
+            } catch (error) {
+                console.error("Telegram notify error:", error);
+            }
+        }
+
+        onAuthStateChanged(auth, async (user) => {
+            const idLabel = document.getElementById('display-uid');
+            const fixedID = await getDeviceID();
+            
+            if (user) {
+                currentUser = { ...user, uid: fixedID };
+                idLabel.innerText = "ID: " + fixedID;
+                loadUserData(fixedID);
+                loadAppData();
+                setInterval(measurePing, 5000);
+                measurePing();
+            } else {
+                await signInAnonymously(auth);
+            }
+        });
+
+        function loadUserData(uid) {
+            onSnapshot(doc(db, "users", uid), (d) => {
+                if(d.exists()) {
+                    window.currentBalance = d.data().balance || 0;
+                    document.getElementById('user-balance').innerText = window.currentBalance + " THB";
+                } else {
+                    setDoc(doc(db, "users", uid), { balance: 0, createdAt: serverTimestamp() });
+                }
+            });
+        }
+
+        function loadAppData() {
+            onSnapshot(doc(db, "settings", "bank"), (d) => {
+                if(d.exists()) {
+                    const data = d.data();
+                    document.getElementById('u-bank-name').innerText = data.name || "BANK";
+                    document.getElementById('u-bank-no').innerText = data.number || "000 000 0000";
+                    document.getElementById('u-bank-holder').innerText = data.holder || "HOLDER NAME";
+                    if(data.qr) {
+                        document.getElementById('u-bank-qr-img').src = data.qr;
+                        document.getElementById('u-bank-qr-icon').src = data.qr;
+                        document.getElementById('adm-bank-qr').value = data.qr;
+                    }
+                    if(data.logo) {
+                        document.getElementById('u-bank-logo-icon').src = data.logo;
+                        document.getElementById('adm-bank-logo').value = data.logo;
+                    }
+                    document.getElementById('adm-bank-name').value = data.name || "";
+                    document.getElementById('adm-bank-no').value = data.number || "";
+                    document.getElementById('adm-bank-holder').value = data.holder || "";
+                }
+            });
+
+            onSnapshot(collection(db, "servers"), (snap) => {
+                allServers = [];
+                snap.forEach(d => allServers.push({id: d.id, ...d.data()}));
+                updateStockUI();
+                renderAdminServerList();
+            });
+
+            onSnapshot(collection(db, "topup_requests"), (snap) => {
+                const list = document.getElementById('adm-req-list');
+                list.innerHTML = `<h3 class="text-xs font-bold text-blue-400 mb-4 uppercase tracking-widest">Pending Requests</h3>`;
+                snap.forEach(d => {
+                    const r = d.data();
+                    list.innerHTML += `
+                        <div class="bg-slate-800 p-4 rounded-3xl border border-white/5 mb-4 space-y-3">
+                            <div class="flex justify-between items-center">
+                                <span class="text-[10px] font-mono text-slate-400">${r.uid}</span>
+                                <span class="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-[10px] font-bold">${r.amount} THB</span>
+                            </div>
+                            <img src="${r.slip}" class="w-full h-48 object-cover rounded-2xl cursor-pointer" onclick="window.open('${r.slip}')">
+                            <div class="grid grid-cols-2 gap-2 pt-2">
+                                <button onclick="approveTopup('${d.id}', '${r.uid}', ${r.amount})" class="bg-green-600 py-3 rounded-xl text-[10px] font-bold uppercase">Approve</button>
+                                <button onclick="cancelTopup('${d.id}')" class="bg-red-600/20 text-red-500 py-3 rounded-xl text-[10px] font-bold uppercase border border-red-500/20">Cancel</button>
+                            </div>
+                        </div>`;
+                });
+            });
+        }
+
+        window.updateStockUI = () => {
+            const country = document.getElementById('country-select').value;
+            const filtered = allServers.filter(s => s.flag === country);
+            const stockCount = filtered.length;
+            document.getElementById('stock-badge').innerText = `STOCK: ${stockCount}`;
+            const flagMap = { 'th': 'https://flagcdn.com/w80/th.png', 'sg': 'https://flagcdn.com/w80/sg.png' };
+            document.getElementById('selected-flag-img').src = flagMap[country];
+            const displayArea = document.getElementById('user-gen-area');
+            if(stockCount > 0) {
+                const firstServer = filtered[0];
+                displayArea.innerHTML = `
+                    <div class="bg-white/5 p-6 rounded-3xl border border-white/5 text-center space-y-5">
+                        <div class="grid grid-cols-3 gap-2">
+                            <div class="bg-black/40 p-3 rounded-2xl border border-white/5">
+                                <div class="w-2 h-2 bg-green-500 rounded-full online-dot mx-auto mb-1"></div>
+                                <p class="text-[8px] font-bold text-slate-500 uppercase">Status</p>
+                                <p class="text-[9px] font-black text-green-400">ONLINE</p>
+                            </div>
+                            <div class="bg-black/40 p-3 rounded-2xl border border-white/5 text-center">
+                                <i class="fas fa-signal text-[10px] text-blue-400 mb-1"></i>
+                                <p class="text-[8px] font-bold text-slate-500 uppercase">Live Ping</p>
+                                <p id="live-ping-val" class="text-[9px] font-black text-blue-400">Measuring...</p>
+                            </div>
+                            <div class="bg-black/40 p-3 rounded-2xl border border-white/5 text-center">
+                                <i class="fas fa-plug text-[10px] text-purple-400 mb-1"></i>
+                                <p class="text-[8px] font-bold text-slate-500 uppercase">Port</p>
+                                <p class="text-[9px] font-black text-purple-400">${firstServer.port || '80'}</p>
+                            </div>
+                        </div>
+                        <button onclick="buyOneConfig('${country}')" class="w-full bg-blue-600 py-4 rounded-2xl font-black text-xs uppercase shadow-xl shadow-blue-600/30">GENERATE CONFIG (50 THB)</button>
+                        
+                        <div class="bg-white/5 p-3 rounded-2xl border border-white/5 mt-2">
+                            <p class="text-[9px] font-black text-blue-500 uppercase tracking-widest mb-1">Server Note</p>
+                            <p class="text-[11px] text-slate-400 font-medium">${firstServer.note || 'No notes available.'}</p>
+                        </div>
+                    </div>`;
+                measurePing();
+            } else {
+                displayArea.innerHTML = `<div class="bg-red-500/5 p-10 rounded-3xl border border-red-500/10 text-center"><p class="text-xs font-bold text-red-400 uppercase tracking-widest">Out of Stock</p></div>`;
+            }
+        };
+
+        window.copyNumber = () => {
+            const num = document.getElementById('u-bank-no').innerText.replace(/\s/g, '');
+            const el = document.createElement('textarea');
+            el.value = num;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            const msg = document.getElementById('copy-msg');
+            msg.classList.remove('opacity-0');
+            setTimeout(() => msg.classList.add('opacity-0'), 2000);
+        };
+
+        window.buyOneConfig = async (country) => {
+            const price = 50;
+            if (window.currentBalance < price) return alert(" ");
+            const targetServer = allServers.find(s => s.flag === country);
+            if (!targetServer) return alert("Stock ");
+            if (!confirm(`${price} THB `)) return;
+            try {
+                await updateDoc(doc(db, "users", currentUser.uid), { balance: increment(-price) });
+                await deleteDoc(doc(db, "servers", targetServer.id));
+                document.getElementById('result-area').value = targetServer.config;
+                document.getElementById('result-modal').classList.remove('hidden');
+            } catch(e) { alert(e.message); }
+        };
+
+        window.updateBankSettings = async () => {
+            const data = {
+                logo: document.getElementById('adm-bank-logo').value,
+                qr: document.getElementById('adm-bank-qr').value,
+                name: document.getElementById('adm-bank-name').value,
+                number: document.getElementById('adm-bank-no').value,
+                holder: document.getElementById('adm-bank-holder').value
+            };
+            await setDoc(doc(db, "settings", "bank"), data);
+            alert("Updated!");
+        };
+
+        window.addServer = async () => {
+            const flag = document.getElementById('adm-flag').value;
+            const name = document.getElementById('adm-sname').value;
+            const port = document.getElementById('adm-sport').value;
+            const note = document.getElementById('adm-snote').value;
+            const config = document.getElementById('adm-sconf').value;
+            if(!name || !config) return alert("Fill data!");
+            await addDoc(collection(db, "servers"), { flag, name, port, note, config, createdAt: serverTimestamp() });
+            alert("Added!");
+            document.getElementById('adm-sconf').value = "";
+            document.getElementById('adm-snote').value = "";
+        };
+
+        window.submitTopup = async () => {
+            if(!window.slipImg) return alert("Upload Slip!");
+            const amt = document.getElementById('dep-amt').value;
+            const btn = document.getElementById('submit-topup-btn');
+            
+            try {
+                btn.disabled = true;
+                btn.innerText = "SUBMITTING...";
+                
+                // Add to Firestore
+                await addDoc(collection(db, "topup_requests"), { 
+                    uid: currentUser.uid, 
+                    amount: parseInt(amt), 
+                    slip: window.slipImg, 
+                    createdAt: serverTimestamp() 
+                });
+
+                // Send Telegram Notification
+                await sendTelegramNotify(currentUser.uid, amt, window.slipImg);
+
+                alert("   ");
+                
+                window.slipImg = null;
+                document.getElementById('slip-preview-box').classList.add('hidden');
+            } catch (error) {
+                alert("Error: " + error.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Submit Topup Request";
+            }
+        };
+
+        window.approveTopup = async (id, uid, amt) => {
+            await updateDoc(doc(db, "users", uid), { balance: increment(amt) });
+            await deleteDoc(doc(db, "topup_requests", id));
+            alert("Approved!");
+        };
+
+        window.cancelTopup = async (id) => {
+            if(confirm("Cancel  ?")) {
+                await deleteDoc(doc(db, "topup_requests", id));
+                alert("Cancelled!");
+            }
+        };
+
+        window.renderAdminServerList = () => {
+            const list = document.getElementById('adm-server-list');
+            list.innerHTML = `<h3 class="text-[10px] font-black text-green-400 mb-4 uppercase tracking-widest text-center">Server Inventory</h3>`;
+            allServers.forEach(s => {
+                list.innerHTML += `
+                    <div class="bg-slate-800/50 p-4 rounded-2xl border border-white/5 mb-2 flex justify-between items-center">
+                        <div class="flex items-center gap-3">
+                             <img src="https://flagcdn.com/w80/${s.flag}.png" class="w-6 h-6 rounded-full border border-white/10">
+                             <div>
+                                <p class="text-xs font-bold text-white uppercase">${s.name}</p>
+                                <p class="text-[8px] text-slate-500 font-mono">${s.port} | ${s.note || 'No Note'}</p>
+                             </div>
+                        </div>
+                        <button onclick="deleteServer('${s.id}')" class="text-red-500 bg-red-500/10 w-8 h-8 rounded-lg flex items-center justify-center"><i class="fas fa-trash text-[10px]"></i></button>
+                    </div>`;
+            });
+        };
+
+        window.deleteServer = async (id) => {
+            if(confirm(" ?")) await deleteDoc(doc(db, "servers", id));
+        };
+
+        window.handleFile = (e) => {
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                window.slipImg = ev.target.result;
+                document.getElementById('slip-preview').src = ev.target.result;
+                document.getElementById('slip-preview-box').classList.remove('hidden');
+            };
+            reader.readAsDataURL(e.target.files[0]);
+        };
+
+        window.switchPage = (p) => {
+            if (p === 'admin' && !isAdminAuthenticated) {
+                const pass = prompt("Admin Password:");
+                if (pass === ADMIN_PASS) {
+                    isAdminAuthenticated = true;
+                } else {
+                    if(pass !== null) alert("Password ");
+                    return;
+                }
+            }
+            document.querySelectorAll('.page').forEach(el => el.classList.add('hidden'));
+            document.getElementById(p + '-page').classList.remove('hidden');
+            document.querySelectorAll('.nav-btn').forEach(btn => btn.classList.replace('text-blue-500', 'text-slate-500'));
+            document.getElementById(p === 'main' ? 'nav-home' : 'nav-admin')?.classList.replace('text-slate-500', 'text-blue-500');
+        };
+
+        window.copyResult = () => {
+            const area = document.getElementById('result-area');
+            area.select();
+            document.execCommand('copy');
+            alert("Config Copied!");
+            document.getElementById('result-modal').classList.add('hidden');
+        };
+    </script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        body { background: #020617; color: white; font-family: 'Plus Jakarta Sans', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .glass { background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .input-box { background: #0f172a; border: 1px solid #1e293b; color: white; padding: 14px; border-radius: 20px; width: 100%; outline: none; transition: all 0.3s ease; }
+        .input-box:focus { border-color: #3b82f6; box-shadow: 0 0 15px rgba(59, 130, 246, 0.1); }
+        .page { animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        .bank-card {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        }
+        .logo-frame {
+            width: 55px; height: 55px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .logo-frame img { width: 38px; height: 38px; object-fit: contain; }
+        .gold-text { background: linear-gradient(to right, #fde047, #eab308); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .online-dot { animation: pulse 2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+        
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+    </style>
+</head>
+<body class="pb-32">
+
+    <div class="p-6 max-w-md mx-auto flex justify-between items-center">
+        <div>
+            <h1 class="text-xl font-black italic tracking-tighter text-blue-500">JK-V2RAY</h1>
+            <span class="text-[9px] font-bold text-slate-500 uppercase tracking-widest">Stable v5.5 Premium</span>
+        </div>
+        <div id="display-uid" class="px-4 py-2 bg-slate-900 rounded-2xl text-[10px] font-mono text-blue-400 border border-blue-500/10 tracking-widest shadow-inner">ID: LOADING...</div>
+    </div>
+
+    <!-- Main Page -->
+    <div id="main-page" class="page max-w-md mx-auto px-4 space-y-6">
+        <!-- Balance Section -->
+        <div class="glass p-10 rounded-[2.5rem] text-center shadow-2xl relative overflow-hidden">
+            <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+            <p class="text-[10px] text-slate-500 uppercase font-black tracking-widest mb-2">My Balance</p>
+            <h1 id="user-balance" class="text-5xl font-black tracking-tighter">0 THB</h1>
+        </div>
+
+        <!-- Server Selection Section -->
+        <div class="glass p-6 rounded-[2.5rem] space-y-5">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <img id="selected-flag-img" src="https://flagcdn.com/w80/th.png" class="w-8 h-8 rounded-full border border-white/10">
+                    <h2 class="text-xs font-black uppercase tracking-widest">Select Server</h2>
+                </div>
+                <span id="stock-badge" class="bg-blue-500/10 text-blue-400 text-[10px] px-4 py-1.5 rounded-full font-black uppercase shadow-inner">STOCK: 0</span>
+            </div>
+            <select id="country-select" onchange="updateStockUI()" class="input-box text-sm font-bold bg-slate-900 border-none appearance-none">
+                <option value="th">THAILAND SERVER VIP</option>
+                <option value="sg">SINGAPORE SERVER VIP</option>
+            </select>
+            <div id="user-gen-area"></div>
+        </div>
+
+        <!-- Payment Section -->
+        <div class="space-y-4">
+            <div class="flex justify-between items-center px-2">
+                <h2 class="text-[10px] font-black uppercase tracking-widest text-slate-400">Payment Information</h2>
+            </div>
+
+            <!-- Bank Card UI -->
+            <div class="bank-card p-6 rounded-[2.5rem] flex flex-col justify-between h-64">
+                <div class="flex justify-between items-center">
+                    <div class="logo-frame"><img id="u-bank-logo-icon" src=""></div>
+                    <div class="text-center flex-1 mx-4">
+                        <p id="u-bank-name" class="text-lg font-black gold-text uppercase leading-tight">BANK</p>
+                    </div>
+                    <div onclick="document.getElementById('qr-modal').classList.remove('hidden')" class="logo-frame cursor-pointer hover:bg-white/10 transition-colors shadow-lg">
+                        <img id="u-bank-qr-icon" src="">
+                    </div>
+                </div>
+                
+                <div class="text-center">
+                    <p class="text-[8px] text-slate-500 font-bold uppercase tracking-[0.2em] mb-1">Account Holder</p>
+                    <p id="u-bank-holder" class="text-md font-black text-white uppercase tracking-tight">HOLDER NAME</p>
+                </div>
+
+                <div onclick="copyNumber()" class="bg-black/30 p-4 rounded-2xl border border-white/5 relative cursor-pointer active:scale-95 transition-transform shadow-inner">
+                    <p class="text-[8px] text-slate-500 font-bold uppercase tracking-[0.2em] mb-1">Account Number</p>
+                    <div class="flex justify-between items-center">
+                        <p id="u-bank-no" class="text-2xl font-black font-mono tracking-[0.1em] text-white">000 000 0000</p>
+                        <i class="fas fa-copy text-blue-500/50 text-sm"></i>
+                    </div>
+                    <div id="copy-msg" class="absolute inset-0 bg-blue-600 rounded-2xl flex items-center justify-center text-xs font-bold opacity-0 pointer-events-none transition-opacity">COPIED TO CLIPBOARD!</div>
+                </div>
+            </div>
+
+            <!-- Topup Request Form -->
+            <div class="glass p-6 rounded-[2.5rem] space-y-4 shadow-xl">
+                <div class="grid grid-cols-2 gap-3">
+                    <select id="dep-amt" class="input-box text-xs font-bold bg-slate-900 border-none">
+                        <option value="50">50 THB</option>
+                        <option value="100">100 THB</option>
+                        <option value="500">500 THB</option>
+                    </select>
+                    <label for="slip-file" class="bg-blue-500/10 flex items-center justify-center rounded-2xl cursor-pointer border border-blue-500/20 text-blue-400 font-black text-[10px] uppercase active:scale-95 transition-transform shadow-inner">
+                        <i class="fas fa-camera mr-2"></i> Upload Slip
+                    </label>
+                    <input type="file" id="slip-file" class="hidden" onchange="handleFile(event)" accept="image/*">
+                </div>
+                <div id="slip-preview-box" class="hidden text-center"><img id="slip-preview" class="w-32 h-32 mx-auto object-cover rounded-2xl border border-white/5 shadow-2xl"></div>
+                <button id="submit-topup-btn" onclick="submitTopup()" class="w-full bg-blue-600 py-4 rounded-[1.5rem] font-black uppercase text-xs shadow-lg shadow-blue-600/20 active:scale-[0.98] transition-transform">Submit Topup Request</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Page -->
+    <div id="admin-page" class="page hidden max-w-md mx-auto px-4 space-y-6">
+        <div class="flex justify-between items-center">
+            <h1 class="text-xl font-black uppercase tracking-tighter text-red-500 flex items-center gap-2"><i class="fas fa-user-shield"></i> Admin Control</h1>
+            <button onclick="isAdminAuthenticated=false; switchPage('main')" class="text-[9px] font-bold text-slate-500 border border-slate-800 px-3 py-1 rounded-xl uppercase">Logout</button>
+        </div>
+        
+        <div class="glass p-6 rounded-3xl space-y-4">
+            <h3 class="text-[10px] font-black text-blue-400 uppercase tracking-widest">Bank Management</h3>
+            <input id="adm-bank-logo" placeholder="Bank Logo URL" class="input-box text-xs">
+            <input id="adm-bank-qr" placeholder="QR Image URL" class="input-box text-xs">
+            <input id="adm-bank-name" placeholder="Bank Name" class="input-box text-xs">
+            <input id="adm-bank-no" placeholder="Account Number" class="input-box text-xs">
+            <input id="adm-bank-holder" placeholder="Account Holder" class="input-box text-xs">
+            <button onclick="updateBankSettings()" class="w-full bg-blue-600 py-4 rounded-2xl font-black text-xs uppercase shadow-lg shadow-blue-600/20">Save Bank Config</button>
+        </div>
+
+        <div class="glass p-6 rounded-3xl space-y-4">
+            <h3 class="text-[10px] font-black text-green-400 uppercase tracking-widest">Add New Config</h3>
+            <div class="grid grid-cols-2 gap-3">
+                <select id="adm-flag" class="input-box text-xs font-bold col-span-2">
+                    <option value="th">THAILAND</option>
+                    <option value="sg">SINGAPORE</option>
+                </select>
+                <input id="adm-sname" placeholder="Name (e.g. VIP-1)" class="input-box text-xs">
+                <input id="adm-sport" placeholder="Port (e.g. 80)" class="input-box text-xs">
+                <input id="adm-snote" placeholder="Note (e.g. Gaming/Netflix)" class="input-box text-xs col-span-2">
+                <textarea id="adm-sconf" placeholder="Config (vmess/vless://...)" class="input-box h-32 text-[10px] font-mono col-span-2"></textarea>
+            </div>
+            <button onclick="addServer()" class="w-full bg-green-600 py-4 rounded-2xl font-black text-xs uppercase shadow-lg shadow-green-600/20">Upload Stock</button>
+        </div>
+
+        <div id="adm-server-list" class="glass p-6 rounded-3xl shadow-xl"></div>
+        <div id="adm-req-list" class="pb-20"></div>
+    </div>
+
+    <!-- Modals -->
+    <div id="qr-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-8 hidden">
+        <div class="text-center space-y-6">
+            <div class="bg-white p-4 rounded-[2.5rem] inline-block shadow-2xl shadow-white/10"><img id="u-bank-qr-img" class="w-72 h-72 object-contain"></div>
+            <button onclick="document.getElementById('qr-modal').classList.add('hidden')" class="w-full py-4 bg-white/10 rounded-2xl font-black text-xs uppercase tracking-widest">Close Modal</button>
+        </div>
+    </div>
+
+    <div id="result-modal" class="fixed inset-0 bg-black/95 z-[100] flex items-center justify-center p-6 hidden">
+        <div class="glass w-full max-w-sm rounded-[3rem] p-8 space-y-6 text-center shadow-2xl border-white/10">
+            <h2 class="text-xl font-black italic gold-text">CONFIG GENERATED!</h2>
+            <textarea id="result-area" readonly class="input-box h-40 text-[10px] font-mono bg-black/50 border-white/10"></textarea>
+            <div class="flex gap-2">
+                <button onclick="copyResult()" class="flex-1 bg-blue-600 py-4 rounded-2xl font-black text-xs uppercase shadow-lg shadow-blue-600/20">Copy Config</button>
+                <button onclick="document.getElementById('result-modal').classList.add('hidden')" class="px-6 bg-white/5 rounded-2xl text-[10px] font-black uppercase">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Bar -->
+    <div class="fixed bottom-8 left-1/2 -translate-x-1/2 w-80 glass rounded-[2.5rem] p-2 flex justify-between shadow-2xl z-[90] border-white/10">
+        <button id="nav-home" onclick="switchPage('main')" class="nav-btn flex-1 p-4 text-blue-500 transition-all active:scale-90"><i class="fas fa-home text-xl"></i></button>
+        <button id="nav-admin" onclick="switchPage('admin')" class="nav-btn flex-1 p-4 text-slate-500 transition-all active:scale-90"><i class="fas fa-shield-alt text-xl"></i></button>
+        <button onclick="location.reload()" class="flex-1 p-4 text-slate-500 active:rotate-180 transition-all duration-500"><i class="fas fa-redo-alt text-xl"></i></button>
+    </div>
+
+    <!-- Floating Telegram Chat Button (Added as requested) -->
+    <a href="https://t.me/Juevpn" target="_blank" rel="noopener noreferrer" 
+       class="fixed bottom-24 right-5 z-[110] bg-gradient-to-br from-blue-500 to-blue-700 text-white w-14 h-14 rounded-full flex items-center justify-center shadow-2xl shadow-blue-500/40 hover:scale-110 active:scale-95 transition-all duration-300 border border-white/20 backdrop-blur-sm">
+        <i class="fab fa-telegram-plane text-2xl"></i>
+    </a>
+
+</body>
+</html>

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Support Chat with Telegram Notify</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/peerjs/1.5.4/peerjs.min.js"></script>
+    <style>
+        /* Same styles as before (keep all CSS) */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        * { font-family: 'Inter', sans-serif; }
+        .messenger-bubble-me { background-color: #0084ff; color: white; border-radius: 18px 18px 4px 18px; }
+        .messenger-bubble-other { background-color: #e4e6eb; color: #050505; border-radius: 18px 18px 18px 4px; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .admin-tag { font-size: 9px; background: rgba(0,0,0,0.1); padding: 2px 6px; border-radius: 12px; font-weight: 600; }
+        @keyframes blink { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.9); } 100% { opacity: 1; transform: scale(1); } }
+        .online-dot { animation: blink 1.2s infinite ease-in-out; }
+        .offline-dot { opacity: 0.5; filter: grayscale(0.5); }
+        .reaction-picker {
+            position: fixed;
+            background: white;
+            border-radius: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            padding: 8px 12px;
+            display: flex;
+            gap: 12px;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+        .reaction-emoji { font-size: 28px; cursor: pointer; transition: transform 0.1s; }
+        .reply-preview { background: #f0f2f5; border-left: 3px solid #0084ff; padding: 4px 8px; border-radius: 12px; margin-bottom: 4px; font-size: 12px; }
+        .user-list-item.active { background: #e4e6eb; }
+        .notification-badge { background-color: #ef4444; color: white; border-radius: 20px; padding: 2px 6px; font-size: 10px; margin-left: 8px; }
+    </style>
+</head>
+<body class="h-screen flex items-center justify-center bg-gray-100">
+
+<div id="app-container" class="w-full max-w-md h-full bg-white flex flex-col shadow-xl overflow-hidden relative">
+    <!-- Header (same) -->
+    <header class="flex items-center justify-between px-4 py-3 border-b bg-white/95 backdrop-blur-md sticky top-0 z-30">
+        <div class="flex items-center gap-3">
+            <div class="relative">
+                <div class="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center text-white shadow-md">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                </div>
+                <div id="online-dot" class="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-white"></div>
+            </div>
+            <div>
+                <h1 id="chat-title" class="font-bold text-[15px] text-gray-900">Direct Support</h1>
+                <p id="presence-text" class="text-xs text-gray-500">Active now</p>
+            </div>
+        </div>
+        <div class="flex gap-1">
+            <button id="audio-call-btn" class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full">📞</button>
+            <button id="video-call-btn" class="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full">📹</button>
+            <button id="admin-settings-btn" class="p-2 text-gray-500 hover:bg-gray-100 rounded-full">⚙️</button>
+        </div>
+    </header>
+
+    <!-- Admin Sidebar -->
+    <div id="admin-sidebar" class="hidden fixed inset-y-0 left-0 w-64 bg-white shadow-xl z-40 transform transition-transform overflow-y-auto">
+        <div class="p-4 border-b flex justify-between sticky top-0 bg-white"><h2 class="font-bold">Users</h2><button id="close-sidebar">✕</button></div>
+        <div id="user-list-container" class="divide-y"></div>
+    </div>
+    <button id="show-users-btn" class="hidden fixed bottom-20 left-4 bg-indigo-600 text-white p-3 rounded-full shadow-lg z-30">👥</button>
+
+    <!-- Chat Messages -->
+    <main id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 bg-white hide-scrollbar"></main>
+
+    <!-- Reply preview bar -->
+    <div id="reply-preview-bar" class="hidden mx-3 mb-1 p-2 bg-gray-100 rounded-xl flex justify-between items-center">
+        <div class="text-xs text-gray-600 truncate flex-1"><span class="font-semibold">Replying to:</span> <span id="reply-preview-text"></span></div>
+        <button id="cancel-reply" class="text-gray-500 text-lg font-bold px-2">✕</button>
+    </div>
+
+    <div id="upload-progress" class="hidden mx-4 mb-2 p-2 bg-blue-50 rounded-lg text-xs text-blue-600 animate-pulse">⏫ ပို့နေပါသည်...</div>
+    <div id="record-ui" class="hidden flex justify-between bg-red-50 p-2 rounded-2xl mb-2 mx-3"><div class="text-red-600 text-xs animate-pulse">🔴 အသံဖမ်းနေသည်...</div><button id="stop-record-btn" class="bg-red-600 text-white p-2 rounded-full">⏹</button></div>
+
+    <!-- Footer -->
+    <footer class="p-3 border-t bg-white">
+        <div class="flex items-center gap-2">
+            <div class="flex gap-1">
+                <label class="p-2 text-indigo-600 cursor-pointer">🖼️<input id="img-input" type="file" accept="image/*" class="hidden"></label>
+                <label class="p-2 text-indigo-600 cursor-pointer">🎥<input id="vid-input" type="file" accept="video/*" class="hidden"></label>
+                <button id="voice-record-start" class="p-2 text-indigo-600">🎤</button>
+            </div>
+            <input id="msg-input" type="text" placeholder="Aa" class="flex-1 bg-gray-100 rounded-full px-4 py-2 focus:outline-none">
+            <button id="send-text-btn" class="p-2 text-indigo-600">➤</button>
+        </div>
+    </footer>
+
+    <!-- Modals (Admin, Call) -->
+    <div id="admin-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div class="bg-white rounded-2xl p-6 w-72 text-center"><h3 class="font-bold text-lg">Admin Login</h3><input type="password" id="admin-password" class="border rounded-full w-full px-4 py-2 my-4"><div class="flex gap-2"><button id="admin-cancel" class="flex-1 py-2 bg-gray-100 rounded-full">Cancel</button><button id="admin-verify" class="flex-1 py-2 bg-indigo-600 text-white rounded-full">Login</button></div></div>
+    </div>
+    <div id="call-modal" class="hidden fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4">
+        <div class="relative w-full max-w-sm bg-gray-900 rounded-3xl overflow-hidden"><video id="remote-video" class="w-full h-96 object-cover" autoplay playsinline></video><video id="local-video" class="absolute bottom-4 right-4 w-24 h-32 rounded-xl object-cover border-2" autoplay muted playsinline></video><div class="flex justify-center gap-6 p-5"><button id="end-call-btn" class="bg-red-600 p-4 rounded-full text-white">📞 End</button></div></div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+    import { getFirestore, collection, addDoc, query, onSnapshot, orderBy, limit, doc, setDoc, serverTimestamp, getDocs, updateDoc, getDoc, deleteDoc, where, writeBatch } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyATyXbmLp3BAiPP0CLgmuQsnO9v_fp1Ipk",
+        authDomain: "vippanel-chat.firebaseapp.com",
+        projectId: "vippanel-chat",
+        storageBucket: "vippanel-chat.firebasestorage.app",
+        messagingSenderId: "1001363252048",
+        appId: "1:1001363252048:web:c4eeab2b9382dcb9bfc255"
+    };
+    const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dg1omxqvq/upload";
+    const UPLOAD_PRESET = "Topup-v2ray";
+    const ADMIN_PASS = "JueHtet19991";
+    // Telegram credentials
+    const TELEGRAM_TOKEN = "8681913272:AAEagLAKPhDoEAd2JJUIG3Lwk1u9j69aPRw";
+    const ADMIN_CHAT_ID = "7848197948";
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const APP_ID = "vippanel-chat-messenger-v2";
+
+    let currentUser = null;
+    let isAdmin = false;
+    let selectedUserId = null;
+    let mediaRecorder, audioChunks;
+    let peer, currentCall, localStream;
+    let replyTarget = null;
+    let allMessages = new Map();
+    let conversationsListener = null;
+    let messagesListener = null;
+
+    // DOM elements
+    const chatContainer = document.getElementById("chat-messages");
+    const msgInput = document.getElementById("msg-input");
+    const sendBtn = document.getElementById("send-text-btn");
+    const imgInput = document.getElementById("img-input");
+    const vidInput = document.getElementById("vid-input");
+    const voiceStart = document.getElementById("voice-record-start");
+    const recordUI = document.getElementById("record-ui");
+    const stopRecord = document.getElementById("stop-record-btn");
+    const uploadProgress = document.getElementById("upload-progress");
+    const replyPreviewBar = document.getElementById("reply-preview-bar");
+    const replyPreviewText = document.getElementById("reply-preview-text");
+    const cancelReply = document.getElementById("cancel-reply");
+    const adminModal = document.getElementById("admin-modal");
+    const adminPassword = document.getElementById("admin-password");
+    const adminVerify = document.getElementById("admin-verify");
+    const adminCancel = document.getElementById("admin-cancel");
+    const adminSettingsBtn = document.getElementById("admin-settings-btn");
+    const presenceText = document.getElementById("presence-text");
+    const onlineDot = document.getElementById("online-dot");
+    const audioCallBtn = document.getElementById("audio-call-btn");
+    const videoCallBtn = document.getElementById("video-call-btn");
+    const callModalDiv = document.getElementById("call-modal");
+    const remoteVideo = document.getElementById("remote-video");
+    const localVideo = document.getElementById("local-video");
+    const endCallBtn = document.getElementById("end-call-btn");
+    const adminSidebar = document.getElementById("admin-sidebar");
+    const showUsersBtn = document.getElementById("show-users-btn");
+    const closeSidebar = document.getElementById("close-sidebar");
+    const userListContainer = document.getElementById("user-list-container");
+
+    // ---------- Telegram notification ----------
+    async function sendTelegramNotification(messageData) {
+        // Only send if message is from a normal user (not admin) OR if you want both, adjust condition
+        // For now, send when sender is not admin (user) OR even admin? you decide.
+        // I'll send only when user sends (to avoid spamming admin when admin replies)
+        if (messageData.senderRole === 'Admin') return;
+        
+        let preview = messageData.text || '';
+        if (!preview && messageData.mediaType === 'image') preview = '📷 ဓာတ်ပုံ';
+        else if (!preview && messageData.mediaType === 'video') preview = '🎥 ဗီဒီယို';
+        else if (!preview && messageData.mediaType === 'audio') preview = '🎤 အသံ';
+        else if (!preview) preview = 'Media file';
+        
+        const caption = `📩 *New message from User*\n🆔 ID: \`${messageData.senderId.slice(0,12)}...\`\n💬 ${preview.slice(0, 100)}`;
+        const url = `https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage`;
+        try {
+            await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    chat_id: ADMIN_CHAT_ID,
+                    text: caption,
+                    parse_mode: 'Markdown',
+                    disable_notification: false
+                })
+            });
+            console.log("Telegram notification sent");
+        } catch (err) {
+            console.error("Telegram send error:", err);
+        }
+    }
+
+    // ---------- Auth ----------
+    onAuthStateChanged(auth, async (user) => {
+        if (user) {
+            currentUser = user;
+            localStorage.setItem("chat_user_uid", user.uid);
+            await initPeer();
+            if (isAdmin) {
+                await loadConversationsList();
+                document.getElementById("chat-title").innerText = "Admin Panel";
+                showUsersBtn.classList.remove("hidden");
+                chatContainer.innerHTML = '<div class="text-center text-gray-400 mt-10">Select a user from the list</div>';
+            } else {
+                selectedUserId = currentUser.uid;
+                listenMessages(selectedUserId);
+                updatePresence("online");
+                listenForNotifications();
+            }
+        } else {
+            await signInAnonymously(auth);
+        }
+    });
+
+    async function updatePresence(status) {
+        if (!currentUser) return;
+        const ref = doc(db, "artifacts", APP_ID, "public", "presence", currentUser.uid);
+        await setDoc(ref, { status, lastSeen: serverTimestamp(), role: isAdmin ? "Admin" : "User", peerId: peer?.id }, { merge: true });
+    }
+
+    // ---------- Admin conversation list ----------
+    async function loadConversationsList() {
+        const messagesRef = collection(db, "artifacts", APP_ID, "public", "data", "messages");
+        const snapshot = await getDocs(messagesRef);
+        const usersMap = new Map();
+        snapshot.forEach(doc => {
+            const data = doc.data();
+            const roomId = data.roomId;
+            if (!roomId) return;
+            if (!usersMap.has(roomId)) {
+                usersMap.set(roomId, { lastMessage: data.text || (data.mediaType || "Media"), lastTime: data.createdAt, unread: 0 });
+            } else {
+                const existing = usersMap.get(roomId);
+                if (data.createdAt && (!existing.lastTime || data.createdAt.toDate() > existing.lastTime.toDate())) {
+                    existing.lastMessage = data.text || (data.mediaType || "Media");
+                    existing.lastTime = data.createdAt;
+                }
+            }
+        });
+        renderUserList(usersMap);
+        if (conversationsListener) conversationsListener();
+        conversationsListener = onSnapshot(messagesRef, () => loadConversationsList());
+    }
+
+    function renderUserList(usersMap) {
+        userListContainer.innerHTML = "";
+        for (let [userId, info] of usersMap.entries()) {
+            const div = document.createElement("div");
+            div.className = `user-list-item p-3 cursor-pointer flex justify-between items-center ${selectedUserId === userId ? 'active' : ''}`;
+            div.innerHTML = `<div class="flex-1"><div class="font-medium text-sm">${userId.slice(0,8)}...</div><div class="text-xs text-gray-500 truncate">${info.lastMessage || "No messages"}</div></div><div class="flex gap-2"><span id="badge-${userId}" class="notification-badge" style="display:none">0</span><button class="delete-conversation text-red-500 text-xs p-1" data-user="${userId}">🗑️</button></div>`;
+            div.addEventListener("click", (e) => { if (!e.target.classList.contains("delete-conversation")) selectUser(userId); });
+            const deleteBtn = div.querySelector(".delete-conversation");
+            deleteBtn.addEventListener("click", async (e) => { e.stopPropagation(); if(confirm("Delete entire conversation?")) await deleteConversation(userId); });
+            userListContainer.appendChild(div);
+        }
+    }
+
+    async function deleteConversation(userId) {
+        const messagesRef = collection(db, "artifacts", APP_ID, "public", "data", "messages");
+        const q = query(messagesRef, where("roomId", "==", userId));
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        snapshot.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        if (selectedUserId === userId) { selectedUserId = null; chatContainer.innerHTML = '<div class="text-center text-gray-400 mt-10">Conversation deleted. Select another user.</div>'; }
+        await loadConversationsList();
+    }
+
+    function selectUser(userId) {
+        selectedUserId = userId;
+        document.querySelectorAll(".user-list-item").forEach(el => el.classList.remove("active"));
+        const activeItem = Array.from(userListContainer.children).find(child => child.querySelector(".delete-conversation")?.dataset.user === userId);
+        if (activeItem) activeItem.classList.add("active");
+        const badge = document.getElementById(`badge-${userId}`);
+        if (badge) badge.style.display = "none";
+        if (messagesListener) messagesListener();
+        listenMessages(userId);
+        document.getElementById("chat-title").innerText = `Chat with ${userId.slice(0,8)}...`;
+        adminSidebar.classList.add("hidden");
+    }
+
+    // ---------- Message Listener ----------
+    function listenMessages(roomId) {
+        if (!roomId) return;
+        const q = query(collection(db, "artifacts", APP_ID, "public", "data", "messages"), where("roomId", "==", roomId), orderBy("createdAt", "asc"), limit(200));
+        messagesListener = onSnapshot(q, (snap) => {
+            allMessages.clear();
+            snap.forEach(doc => allMessages.set(doc.id, { id: doc.id, ...doc.data() }));
+            renderMessages();
+        });
+    }
+
+    function renderMessages() {
+        if (!selectedUserId && !isAdmin) return;
+        const messages = Array.from(allMessages.values()).sort((a,b) => (a.createdAt?.toDate()||0) - (b.createdAt?.toDate()||0));
+        chatContainer.innerHTML = "";
+        messages.forEach(msg => renderMessage(msg));
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function getMessagePreview(msg) {
+        if(msg.text) return msg.text.slice(0,50);
+        if(msg.mediaType === "image") return "📷 Photo";
+        if(msg.mediaType === "video") return "🎥 Video";
+        if(msg.mediaType === "audio") return "🎤 Voice";
+        return "Media";
+    }
+
+    function renderMessage(msg) {
+        const isMe = (msg.senderId === currentUser?.uid);
+        const div = document.createElement("div");
+        div.className = `message-item flex flex-col ${isMe ? "items-end" : "items-start"} mb-2`;
+        let mediaHtml = "";
+        if(msg.mediaUrl) {
+            if(msg.mediaType === "image") mediaHtml = `<img src="${msg.mediaUrl}" class="rounded-xl max-w-full max-h-64 object-contain shadow-sm mb-1" onclick="window.open('${msg.mediaUrl}','_blank')">`;
+            else if(msg.mediaType === "video") mediaHtml = `<video src="${msg.mediaUrl}" controls class="rounded-xl max-w-full max-h-80 shadow-sm mb-1"></video>`;
+            else if(msg.mediaType === "audio") mediaHtml = `<audio src="${msg.mediaUrl}" controls class="h-10 w-48 mb-1"></audio>`;
+        }
+        let replyHtml = "";
+        if(msg.replyTo && msg.replyTo.messageId && allMessages.has(msg.replyTo.messageId)) {
+            const original = allMessages.get(msg.replyTo.messageId);
+            replyHtml = `<div class="reply-preview text-xs mb-1">↩️ ${getMessagePreview(original)}</div>`;
+        }
+        let reactionsHtml = "";
+        if(msg.reactions && Object.keys(msg.reactions).length > 0) {
+            const grouped = {};
+            Object.values(msg.reactions).forEach(emoji => grouped[emoji] = (grouped[emoji]||0)+1);
+            reactionsHtml = `<div class="flex gap-1 mt-1">${Object.entries(grouped).map(([e,c]) => `<span class="text-xs bg-gray-200 px-2 py-0.5 rounded-full">${e} ${c}</span>`).join("")}</div>`;
+        }
+        div.innerHTML = `
+            <div class="flex gap-2 max-w-[85%] ${isMe ? "flex-row-reverse" : "flex-row"} items-end">
+                <div class="w-6 h-6 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center text-[10px]">${msg.senderRole === "Admin" ? "👑" : "👤"}</div>
+                <div class="p-3 shadow-sm ${isMe ? "messenger-bubble-me" : "messenger-bubble-other"}">
+                    ${replyHtml}
+                    ${mediaHtml}
+                    ${msg.text ? `<p class="text-[15px] leading-tight break-words">${escapeHtml(msg.text)}</p>` : ""}
+                    ${reactionsHtml}
+                </div>
+            </div>
+            <div class="flex items-center gap-2 mt-0.5 text-[9px] text-gray-400 px-8">
+                <span>${msg.createdAt?.toDate().toLocaleTimeString([], {hour:"2-digit", minute:"2-digit"})}</span>
+                ${msg.senderRole === "Admin" ? '<span class="admin-tag">ADMIN</span>' : ""}
+            </div>
+        `;
+        const bubble = div.querySelector(`.${isMe ? "messenger-bubble-me" : "messenger-bubble-other"}`);
+        if(bubble) {
+            bubble.addEventListener("contextmenu", (e) => { e.preventDefault(); showMessageActions(e, msg); });
+            let timer; bubble.addEventListener("touchstart", (e) => { timer = setTimeout(() => showMessageActions(e, msg), 500); });
+            bubble.addEventListener("touchend", () => clearTimeout(timer));
+        }
+        chatContainer.appendChild(div);
+    }
+
+    async function showMessageActions(event, msg) {
+        const existing = document.querySelector(".reaction-picker");
+        if(existing) existing.remove();
+        const picker = document.createElement("div"); picker.className = "reaction-picker";
+        ["👍","❤️","😂","😮","😢","😡"].forEach(emoji => {
+            const span = document.createElement("span"); span.className = "reaction-emoji"; span.innerText = emoji;
+            span.onclick = async () => { await addReaction(msg.id, emoji); picker.remove(); };
+            picker.appendChild(span);
+        });
+        const replyBtn = document.createElement("button"); replyBtn.innerText = "💬 Reply"; replyBtn.className = "ml-2 text-sm bg-blue-500 text-white px-3 py-1 rounded-full";
+        replyBtn.onclick = () => { setReplyTarget(msg); picker.remove(); };
+        picker.appendChild(replyBtn);
+        document.body.appendChild(picker);
+        const x = event.clientX || event.touches?.[0]?.clientX; const y = event.clientY || event.touches?.[0]?.clientY;
+        picker.style.left = (x - 80) + "px"; picker.style.top = (y - 50) + "px";
+        setTimeout(() => document.body.addEventListener("click", function removePicker(e) { if(!picker.contains(e.target)) picker.remove(); document.body.removeEventListener("click", removePicker); }), 100);
+    }
+
+    async function addReaction(messageId, emoji) {
+        const msgRef = doc(db, "artifacts", APP_ID, "public", "data", "messages", messageId);
+        const snap = await getDoc(msgRef);
+        if(snap.exists()) {
+            const reactions = snap.data().reactions || {};
+            let newReactions = { ...reactions };
+            if(newReactions[currentUser.uid] === emoji) delete newReactions[currentUser.uid];
+            else newReactions[currentUser.uid] = emoji;
+            await updateDoc(msgRef, { reactions: newReactions });
+        }
+    }
+
+    function setReplyTarget(msg) {
+        replyTarget = { messageId: msg.id, textPreview: getMessagePreview(msg) };
+        replyPreviewText.innerText = replyTarget.textPreview;
+        replyPreviewBar.classList.remove("hidden");
+        msgInput.focus();
+    }
+    cancelReply.onclick = () => { replyTarget = null; replyPreviewBar.classList.add("hidden"); };
+
+    // ---------- Send Message + Telegram noti ----------
+    async function sendMessage(content, mediaUrl=null, mediaType=null) {
+        if (!currentUser) return;
+        let targetRoom = isAdmin ? selectedUserId : currentUser.uid;
+        if (isAdmin && !targetRoom) { alert("Please select a user first."); return; }
+        const payload = {
+            text: content || null,
+            mediaUrl, mediaType,
+            senderId: currentUser.uid,
+            senderRole: isAdmin ? "Admin" : "User",
+            roomId: targetRoom,
+            createdAt: serverTimestamp()
+        };
+        if (replyTarget) {
+            payload.replyTo = { messageId: replyTarget.messageId, preview: replyTarget.textPreview };
+            replyTarget = null; replyPreviewBar.classList.add("hidden");
+        }
+        const docRef = await addDoc(collection(db, "artifacts", APP_ID, "public", "data", "messages"), payload);
+        // Send Telegram notification (only for user messages, not admin's own messages)
+        if (!isAdmin && payload.senderRole !== 'Admin') {
+            await sendTelegramNotification(payload);
+        } else if (isAdmin && payload.senderRole === 'Admin') {
+            // optionally not send
+        } else {
+            await sendTelegramNotification(payload);
+        }
+        if (isAdmin) loadConversationsList();
+    }
+
+    sendBtn.onclick = async () => { const txt = msgInput.value.trim(); if(txt) await sendMessage(txt); msgInput.value = ""; };
+    msgInput.addEventListener("keypress", (e) => { if(e.key === "Enter") sendBtn.click(); });
+
+    // File upload
+    async function uploadAndSend(file, type) {
+        uploadProgress.classList.remove("hidden");
+        const fd = new FormData(); fd.append("file", file); fd.append("upload_preset", UPLOAD_PRESET);
+        try {
+            const res = await fetch(CLOUDINARY_URL, { method: "POST", body: fd });
+            const data = await res.json();
+            await sendMessage(null, data.secure_url, type);
+        } catch(e) { alert("Upload failed"); }
+        uploadProgress.classList.add("hidden");
+    }
+    imgInput.onchange = (e) => uploadAndSend(e.target.files[0], "image");
+    vidInput.onchange = (e) => uploadAndSend(e.target.files[0], "video");
+
+    // Voice record
+    voiceStart.onclick = async () => {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+        mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+        mediaRecorder.onstop = async () => {
+            const blob = new Blob(audioChunks, { type: "audio/webm" });
+            const file = new File([blob], "voice.webm", { type: "audio/webm" });
+            await uploadAndSend(file, "audio");
+            recordUI.classList.add("hidden");
+            stream.getTracks().forEach(t => t.stop());
+        };
+        mediaRecorder.start();
+        recordUI.classList.remove("hidden");
+    };
+    stopRecord.onclick = () => { if(mediaRecorder) mediaRecorder.stop(); };
+
+    // Notifications for normal user (unread count)
+    let unreadCount = 0;
+    function listenForNotifications() {
+        const q = query(collection(db, "artifacts", APP_ID, "public", "data", "messages"), where("roomId", "==", currentUser.uid), orderBy("createdAt", "asc"));
+        onSnapshot(q, (snap) => {
+            let newUnread = 0;
+            snap.forEach(doc => { const msg = doc.data(); if(msg.senderId !== currentUser.uid && !msg.read) newUnread++; });
+            unreadCount = newUnread;
+            let badge = document.getElementById("global-noti-badge");
+            if(!badge) { badge = document.createElement("div"); badge.id = "global-noti-badge"; badge.className = "absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center"; document.querySelector("header .relative").appendChild(badge); }
+            if(unreadCount > 0) { badge.innerText = unreadCount > 9 ? "9+" : unreadCount; badge.style.display = "flex"; } else badge.style.display = "none";
+        });
+    }
+
+    // Peer call (simplified)
+    async function initPeer() {
+        const peerId = `user_${currentUser.uid.slice(0,12)}`;
+        peer = new Peer(peerId, { config: { iceServers: [{ urls: "stun:stun.l.google.com:19302" }] } });
+        peer.on("open", () => updatePresence("online"));
+        peer.on("call", async (incoming) => {
+            if (confirm(`${incoming.metadata.callerName} ခေါ်ဆိုမှု လက်ခံမလား?`)) {
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: incoming.metadata.type === "video" });
+                incoming.answer(localStream);
+                currentCall = incoming;
+                setupCallStreams(incoming, incoming.metadata.type);
+                callModalDiv.classList.remove("hidden");
+            } else incoming.close();
+        });
+    }
+    async function startCall(type) {
+        if (!peer) return alert("Connecting...");
+        const snap = await getDocs(collection(db, "artifacts", APP_ID, "public", "presence"));
+        let targetPeer = null;
+        snap.forEach(d => { if(d.id !== currentUser.uid && d.data().peerId) targetPeer = d.data().peerId; });
+        if(!targetPeer) return alert("No other user online");
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === "video" });
+        const call = peer.call(targetPeer, localStream, { metadata: { callerName: isAdmin ? "Admin" : "User", type } });
+        currentCall = call;
+        setupCallStreams(call, type);
+        callModalDiv.classList.remove("hidden");
+    }
+    function setupCallStreams(call, type) { call.on("stream", (stream) => { remoteVideo.srcObject = stream; }); if(type === "video") localVideo.srcObject = localStream; else localVideo.style.display = "none"; }
+    function endCall() { if(localStream) localStream.getTracks().forEach(t => t.stop()); if(currentCall) currentCall.close(); callModalDiv.classList.add("hidden"); remoteVideo.srcObject = null; localVideo.srcObject = null; }
+    audioCallBtn.onclick = () => startCall("audio");
+    videoCallBtn.onclick = () => startCall("video");
+    endCallBtn.onclick = endCall;
+
+    // Admin login
+    adminSettingsBtn.onclick = () => adminModal.classList.remove("hidden");
+    adminCancel.onclick = () => adminModal.classList.add("hidden");
+    adminVerify.onclick = async () => {
+        if (adminPassword.value === ADMIN_PASS) {
+            isAdmin = true;
+            localStorage.setItem("isAdmin", "true");
+            document.getElementById("chat-title").innerText = "Admin Panel";
+            adminModal.classList.add("hidden");
+            showUsersBtn.classList.remove("hidden");
+            await loadConversationsList();
+            if (messagesListener) messagesListener();
+            chatContainer.innerHTML = '<div class="text-center text-gray-400 mt-10">Select a user from the list</div>';
+            updatePresence("online");
+        } else alert("Wrong password");
+        adminPassword.value = "";
+    };
+
+    showUsersBtn.onclick = () => adminSidebar.classList.remove("hidden");
+    closeSidebar.onclick = () => adminSidebar.classList.add("hidden");
+
+    function escapeHtml(str) { return str?.replace(/[&<>]/g, function(m){ if(m==="&") return "&amp;"; if(m==="<") return "&lt;"; if(m===">") return "&gt;"; return m;}) || ""; }
+    window.addEventListener("beforeunload", () => updatePresence("offline"));
+    window.addEventListener("focus", () => updatePresence("online"));
+</script>
+</body>
+</html>

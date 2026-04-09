@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JK-V2RAY | Admin Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .glass { background: rgba(15,23,42,0.7); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.05); }
+        .input-box { background: #0f172a; border: 1px solid #1e293b; padding: 12px; border-radius: 20px; width: 100%; color: white; outline: none; }
+        /* Custom Modal Styles */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.95); backdrop-filter: blur(8px);
+            display: flex; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal-card {
+            background: rgba(15,23,42,0.95); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 2rem; padding: 1.5rem; max-width: 90%; width: 320px; text-align: center;
+            box-shadow: 0 25px 50px -12px black;
+        }
+        .hidden-modal { display: none; }
+    </style>
+</head>
+<body class="bg-slate-950 text-white p-4 pb-24">
+
+<!-- Custom Modal for Alert & Confirm -->
+<div id="custom-alert" class="modal-overlay hidden-modal">
+    <div class="modal-card">
+        <div id="alert-icon"><i class="fas fa-info-circle text-4xl text-blue-400"></i></div>
+        <h3 id="alert-title" class="text-xl font-bold mt-3">Alert</h3>
+        <p id="alert-message" class="text-slate-300 my-4 text-sm"></p>
+        <button id="alert-ok" class="bg-blue-600 px-6 py-2 rounded-full text-sm font-bold w-full">OK</button>
+    </div>
+</div>
+
+<div id="custom-confirm" class="modal-overlay hidden-modal">
+    <div class="modal-card">
+        <i class="fas fa-question-circle text-5xl text-yellow-400"></i>
+        <h3 id="confirm-title" class="text-xl font-bold mt-3">Confirm</h3>
+        <p id="confirm-message" class="text-slate-300 my-4 text-sm"></p>
+        <div class="flex gap-3 mt-2">
+            <button id="confirm-yes" class="flex-1 bg-green-600 py-2 rounded-full text-sm font-bold">Yes</button>
+            <button id="confirm-no" class="flex-1 bg-red-600/70 py-2 rounded-full text-sm font-bold">No</button>
+        </div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+    import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+    import { getFirestore, doc, onSnapshot, setDoc, updateDoc, addDoc, collection, deleteDoc, serverTimestamp, getDoc, increment } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyARcw7hRhSuIJYFfLT9Pg3yat1LS36UOeQ",
+        authDomain: "vipv2ray-85970.firebaseapp.com",
+        projectId: "vipv2ray-85970",
+        storageBucket: "vipv2ray-85970.firebasestorage.app",
+        messagingSenderId: "526032668769",
+        appId: "1:526032668769:web:1041445a61ed70e4b40220",
+        measurementId: "G-492NQP7QH6"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const ADMIN_EMAIL = "vipv2raypanel@gmail.com";
+
+    let isAdmin = false;
+    let allServers = [];
+
+    // ---------- Custom Modal Helpers (without ugly browser alerts) ----------
+    function showSuccessModal(msg) {
+        return new Promise((resolve) => {
+            document.getElementById('alert-icon').innerHTML = '<i class="fas fa-check-circle text-4xl text-green-400"></i>';
+            document.getElementById('alert-title').innerText = '✅ SUCCESS';
+            document.getElementById('alert-message').innerText = msg;
+            const modal = document.getElementById('custom-alert');
+            modal.classList.remove('hidden-modal');
+            const okBtn = document.getElementById('alert-ok');
+            const handler = () => {
+                modal.classList.add('hidden-modal');
+                okBtn.removeEventListener('click', handler);
+                resolve();
+            };
+            okBtn.addEventListener('click', handler);
+        });
+    }
+
+    function showErrorModal(msg) {
+        return new Promise((resolve) => {
+            document.getElementById('alert-icon').innerHTML = '<i class="fas fa-exclamation-circle text-4xl text-red-400"></i>';
+            document.getElementById('alert-title').innerText = '❌ ERROR';
+            document.getElementById('alert-message').innerText = msg;
+            const modal = document.getElementById('custom-alert');
+            modal.classList.remove('hidden-modal');
+            const okBtn = document.getElementById('alert-ok');
+            const handler = () => {
+                modal.classList.add('hidden-modal');
+                okBtn.removeEventListener('click', handler);
+                resolve();
+            };
+            okBtn.addEventListener('click', handler);
+        });
+    }
+
+    function showConfirmModal(title, message) {
+        return new Promise((resolve) => {
+            document.getElementById('confirm-title').innerText = title;
+            document.getElementById('confirm-message').innerText = message;
+            const modal = document.getElementById('custom-confirm');
+            modal.classList.remove('hidden-modal');
+            const yesBtn = document.getElementById('confirm-yes');
+            const noBtn = document.getElementById('confirm-no');
+            const cleanup = () => {
+                modal.classList.add('hidden-modal');
+                yesBtn.removeEventListener('click', yesHandler);
+                noBtn.removeEventListener('click', noHandler);
+            };
+            const yesHandler = () => { cleanup(); resolve(true); };
+            const noHandler = () => { cleanup(); resolve(false); };
+            yesBtn.addEventListener('click', yesHandler);
+            noBtn.addEventListener('click', noHandler);
+        });
+    }
+
+    async function checkAdmin(user) {
+        if (!user || user.email !== ADMIN_EMAIL) return false;
+        const userDoc = await getDoc(doc(db, "users", user.uid));
+        if (userDoc.exists() && userDoc.data().role === "admin") return true;
+        await setDoc(doc(db, "users", user.uid), { email: user.email, role: "admin", createdAt: serverTimestamp() }, { merge: true });
+        return true;
+    }
+
+    window.adminLogin = async () => {
+        const provider = new GoogleAuthProvider();
+        try {
+            const result = await signInWithPopup(auth, provider);
+            if (result.user.email === ADMIN_EMAIL) {
+                await checkAdmin(result.user);
+                location.reload();
+            } else {
+                await auth.signOut();
+                await showErrorModal("Only vipv2raypanel@gmail.com can access admin.");
+            }
+        } catch(e) { 
+            console.error(e); 
+            await showErrorModal("Login failed: " + e.message);
+        }
+    };
+
+    onAuthStateChanged(auth, async (user) => {
+        if (user && user.email === ADMIN_EMAIL && await checkAdmin(user)) {
+            isAdmin = true;
+            document.getElementById('login-area').classList.add('hidden');
+            document.getElementById('admin-panel').classList.remove('hidden');
+            loadAdminData();
+        } else {
+            document.getElementById('login-area').classList.remove('hidden');
+            document.getElementById('admin-panel').classList.add('hidden');
+            if (user) await auth.signOut();
+        }
+    });
+
+    // ---------- Admin Functions ----------
+    async function updateProductPrice(product) {
+        let newPrice = parseInt(document.getElementById(`adm-price-${product}`).value);
+        if(isNaN(newPrice) || newPrice < 1) { await showErrorModal("Invalid price!"); return; }
+        await setDoc(doc(db, "settings", "prices"), { [product]: newPrice }, { merge: true });
+        await showSuccessModal(`${product.toUpperCase()} price updated to ${newPrice} THB!`);
+    }
+
+    async function updateBankSettings() {
+        await setDoc(doc(db, "settings", "bank"), {
+            logo: document.getElementById('adm-bank-logo').value,
+            qr: document.getElementById('adm-bank-qr').value,
+            name: document.getElementById('adm-bank-name').value,
+            number: document.getElementById('adm-bank-no').value,
+            holder: document.getElementById('adm-bank-holder').value
+        });
+        await showSuccessModal("Bank settings updated!");
+    }
+
+    async function updateProductLogos() {
+        await setDoc(doc(db, "settings", "product_logos"), {
+            v2box_logo: document.getElementById('adm-v2box-logo').value,
+            zivpn_logo: document.getElementById('adm-zivpn-logo').value,
+            netmod_logo: document.getElementById('adm-netmod-logo').value
+        });
+        await showSuccessModal("Product logos updated!");
+    }
+
+    async function sendAdminMessage() {
+        const msg = document.getElementById('admin-message-text').value.trim();
+        if(!msg) return showErrorModal("Enter message");
+        await setDoc(doc(db, "settings", "adminMessage"), { text: msg, timestamp: serverTimestamp(), lastUpdated: Date.now().toString() });
+        await showSuccessModal("Announcement sent!");
+        document.getElementById('admin-message-text').value = "";
+    }
+
+    let currentAdminProduct = 'v2box';
+    window.setAdminProductTab = (product) => {
+        currentAdminProduct = product;
+        document.querySelectorAll('.admin-tab-btn').forEach(btn => {
+            if(btn.getAttribute('data-product') === product) {
+                btn.classList.add('bg-blue-600', 'text-white');
+                btn.classList.remove('bg-white/5', 'text-slate-400');
+            } else {
+                btn.classList.remove('bg-blue-600', 'text-white');
+                btn.classList.add('bg-white/5', 'text-slate-400');
+            }
+        });
+        ['sname','sport','snote','sconf','logo'].forEach(f => document.getElementById(`adm-unified-${f}`).value = '');
+        document.getElementById('adm-unified-flag').value = 'th';
+    };
+
+    window.addUnifiedServer = async () => {
+        const product = currentAdminProduct;
+        const flag = document.getElementById('adm-unified-flag').value;
+        const name = document.getElementById('adm-unified-sname').value;
+        const port = document.getElementById('adm-unified-sport').value;
+        const note = document.getElementById('adm-unified-snote').value;
+        const config = document.getElementById('adm-unified-sconf').value;
+        const logoUrl = document.getElementById('adm-unified-logo').value;
+        if(!name || !config) return showErrorModal("Name and Config required");
+        await addDoc(collection(db, "servers"), { product, flag, name, port, note, config, logoUrl, createdAt: serverTimestamp() });
+        await showSuccessModal(`${product.toUpperCase()} server added!`);
+        document.getElementById('adm-unified-sconf').value = "";
+        document.getElementById('adm-unified-snote').value = "";
+        document.getElementById('adm-unified-sname').value = "";
+        document.getElementById('adm-unified-sport').value = "";
+        document.getElementById('adm-unified-logo').value = "";
+    };
+
+    function renderAdminServerList() {
+        const containers = ['v2box','zivpn','netmod'];
+        containers.forEach(prod => {
+            const container = document.getElementById(`adm-server-list-${prod}`);
+            if(!container) return;
+            container.innerHTML = `<h3 class="text-[10px] font-black text-green-400 mb-4 uppercase">${prod.toUpperCase()} Inventory</h3>`;
+            allServers.filter(s => s.product === prod).forEach(s => {
+                const logoHtml = s.logoUrl ? `<img src="${s.logoUrl}" class="w-6 h-6 rounded-full">` : `<div class="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">🖥️</div>`;
+                container.innerHTML += `<div class="bg-slate-800/50 p-4 rounded-2xl border border-white/5 mb-2 flex justify-between items-center">
+                    <div class="flex items-center gap-3">${logoHtml}<div><p class="text-xs font-bold text-white">${s.name}</p><p class="text-[8px] text-slate-500">${s.port} | ${s.note || ''}</p></div></div>
+                    <div class="flex gap-2"><button onclick="deleteServer('${s.id}')" class="text-red-500 bg-red-500/10 w-8 h-8 rounded-lg"><i class="fas fa-trash text-[10px]"></i></button></div>
+                </div>`;
+            });
+        });
+    }
+
+    window.deleteServer = async (id) => {
+        if(!isAdmin) return;
+        if(!await showConfirmModal("Delete Server", "Permanently delete this server?")) return;
+        await deleteDoc(doc(db, "servers", id));
+        await showSuccessModal("Server deleted.");
+    };
+
+    // ---------- Approve with user doc creation fix ----------
+    window.approveTopup = async (id, authUid, amt) => {
+        if(!isAdmin) return;
+        if(!await showConfirmModal("Approve Request", `Approve ${amt} THB for user ${authUid}?`)) return;
+        try {
+            const userRef = doc(db, "users", authUid);
+            const userSnap = await getDoc(userRef);
+            if (!userSnap.exists()) {
+                // Create user document first if not exists
+                await setDoc(userRef, { balance: 0, createdAt: serverTimestamp() });
+            }
+            // Now increment balance
+            await updateDoc(userRef, { balance: increment(amt) });
+            await deleteDoc(doc(db, "topup_requests", id));
+            await showSuccessModal(`Approved ${amt} THB!`);
+        } catch(e) {
+            console.error(e);
+            await showErrorModal("Failed to approve: " + e.message);
+        }
+    };
+    
+    window.cancelTopup = async (id) => {
+        if(!isAdmin) return;
+        if(!await showConfirmModal("Cancel Request", "Cancel this topup request?")) return;
+        await deleteDoc(doc(db, "topup_requests", id));
+        await showSuccessModal("Request cancelled.");
+    };
+
+    function loadAdminRequests() {
+        onSnapshot(collection(db, "topup_requests"), (snap) => {
+            const list = document.getElementById('adm-req-list');
+            if(!list) return;
+            list.innerHTML = `<h3 class="text-xs font-bold text-blue-400 mb-4 uppercase">Pending Requests</h3>`;
+            snap.forEach(d => {
+                const r = d.data();
+                list.innerHTML += `
+                    <div class="bg-slate-800 p-4 rounded-3xl border border-white/5 mb-4">
+                        <div class="flex justify-between"><span class="text-[10px] font-mono text-slate-400">${r.uid}</span><span class="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-[10px] font-bold">${r.amount} THB</span></div>
+                        <img src="${r.slip}" class="w-full h-40 object-cover rounded-2xl my-3 cursor-pointer" onclick="window.open('${r.slip}')">
+                        <div class="grid grid-cols-2 gap-2"><button onclick="approveTopup('${d.id}', '${r.authUid}', ${r.amount})" class="bg-green-600 py-2 rounded-xl text-[10px] font-bold">Approve</button><button onclick="cancelTopup('${d.id}')" class="bg-red-600/20 text-red-500 py-2 rounded-xl text-[10px] font-bold">Cancel</button></div>
+                    </div>`;
+            });
+        });
+    }
+
+    function loadAdminData() {
+        onSnapshot(collection(db, "servers"), (snap) => {
+            allServers = [];
+            snap.forEach(d => allServers.push({id: d.id, ...d.data()}));
+            renderAdminServerList();
+        });
+        loadAdminRequests();
+        onSnapshot(doc(db, "settings", "prices"), (docSnap) => {
+            if(docSnap.exists()) {
+                document.getElementById('adm-price-v2box').value = docSnap.data().v2box || 50;
+                document.getElementById('adm-price-zivpn').value = docSnap.data().zivpn || 50;
+                document.getElementById('adm-price-netmod').value = docSnap.data().netmod || 50;
+            }
+        });
+        onSnapshot(doc(db, "settings", "bank"), (d) => {
+            if(d.exists()) {
+                document.getElementById('adm-bank-logo').value = d.data().logo || '';
+                document.getElementById('adm-bank-qr').value = d.data().qr || '';
+                document.getElementById('adm-bank-name').value = d.data().name || '';
+                document.getElementById('adm-bank-no').value = d.data().number || '';
+                document.getElementById('adm-bank-holder').value = d.data().holder || '';
+            }
+        });
+        onSnapshot(doc(db, "settings", "product_logos"), (docSnap) => {
+            if(docSnap.exists()) {
+                document.getElementById('adm-v2box-logo').value = docSnap.data().v2box_logo || '';
+                document.getElementById('adm-zivpn-logo').value = docSnap.data().zivpn_logo || '';
+                document.getElementById('adm-netmod-logo').value = docSnap.data().netmod_logo || '';
+            }
+        });
+    }
+
+    // Expose functions to global scope for onclick
+    window.updateProductPrice = updateProductPrice;
+    window.updateBankSettings = updateBankSettings;
+    window.updateProductLogos = updateProductLogos;
+    window.sendAdminMessage = sendAdminMessage;
+    window.addUnifiedServer = addUnifiedServer;
+    window.approveTopup = approveTopup;
+    window.cancelTopup = cancelTopup;
+    window.deleteServer = deleteServer;
+</script>
+
+<!-- Login Area -->
+<div id="login-area" class="max-w-md mx-auto text-center p-10 space-y-6">
+    <i class="fas fa-lock text-6xl text-blue-500"></i>
+    <h2 class="text-2xl font-black">Admin Access Only</h2>
+    <button onclick="adminLogin()" class="bg-blue-600 px-8 py-3 rounded-2xl"><i class="fab fa-google mr-2"></i> Sign in with Google</button>
+    <p class="text-xs text-slate-500">Only vipv2raypanel@gmail.com</p>
+</div>
+
+<!-- Admin Panel (Hidden until login) -->
+<div id="admin-panel" class="hidden max-w-md mx-auto space-y-6">
+    <div class="flex justify-between"><h1 class="text-xl font-black text-red-500"><i class="fas fa-user-shield"></i> Admin Control</h1><a href="test.html" class="text-[9px] text-slate-400 border border-slate-800 px-3 py-1 rounded-xl">Go to Dashboard</a></div>
+    
+    <div class="glass p-6 rounded-3xl space-y-4"><h3 class="text-[10px] font-black text-green-400">💰 Product Prices</h3><div class="grid grid-cols-3 gap-3"><div><label class="text-[8px]">V2RAY</label><input id="adm-price-v2box" type="number" class="input-box text-xs bg-slate-800"></div><div><label class="text-[8px]">ZIVPN</label><input id="adm-price-zivpn" type="number" class="input-box text-xs bg-slate-800"></div><div><label class="text-[8px]">NetMod</label><input id="adm-price-netmod" type="number" class="input-box text-xs bg-slate-800"></div></div><div class="grid grid-cols-3 gap-2"><button onclick="updateProductPrice('v2box')" class="bg-blue-600 py-2 rounded-xl text-[10px] font-black">Update V2RAY</button><button onclick="updateProductPrice('zivpn')" class="bg-purple-600 py-2 rounded-xl text-[10px] font-black">Update ZIVPN</button><button onclick="updateProductPrice('netmod')" class="bg-cyan-600 py-2 rounded-xl text-[10px] font-black">Update NetMod</button></div></div>
+    
+    <div class="glass p-6 rounded-3xl space-y-4"><h3 class="text-[10px] font-black text-yellow-400">📢 Announcement</h3><textarea id="admin-message-text" rows="3" class="input-box text-xs bg-slate-800"></textarea><button onclick="sendAdminMessage()" class="w-full bg-yellow-600 py-3 rounded-2xl text-xs font-black">Publish</button></div>
+    
+    <div class="glass p-6 rounded-3xl space-y-4"><h3 class="text-[10px] font-black text-blue-400">🏦 Bank Settings</h3><input id="adm-bank-logo" placeholder="Logo URL" class="input-box text-xs bg-slate-800"><input id="adm-bank-qr" placeholder="QR URL" class="input-box text-xs bg-slate-800"><input id="adm-bank-name" placeholder="Bank Name" class="input-box text-xs bg-slate-800"><input id="adm-bank-no" placeholder="Account No." class="input-box text-xs bg-slate-800"><input id="adm-bank-holder" placeholder="Holder" class="input-box text-xs bg-slate-800"><button onclick="updateBankSettings()" class="w-full bg-blue-600 py-3 rounded-2xl text-xs font-black">Save Bank</button></div>
+    
+    <div class="glass p-6 rounded-3xl space-y-4"><h3 class="text-[10px] font-black text-yellow-400">🎨 Product Logos</h3><input id="adm-v2box-logo" placeholder="V2RAY Logo URL" class="input-box text-xs bg-slate-800"><input id="adm-zivpn-logo" placeholder="ZIVPN Logo URL" class="input-box text-xs bg-slate-800"><input id="adm-netmod-logo" placeholder="NetMod Logo URL" class="input-box text-xs bg-slate-800"><button onclick="updateProductLogos()" class="w-full bg-yellow-600 py-3 rounded-2xl text-xs font-black">Save Logos</button></div>
+    
+    <div class="glass p-6 rounded-3xl space-y-4"><h3 class="text-[10px] font-black text-green-400">➕ Add Server</h3><div class="flex rounded-xl bg-slate-800 p-1 gap-1"><button data-product="v2box" onclick="setAdminProductTab('v2box')" class="admin-tab-btn flex-1 py-2 rounded-lg text-[10px] font-black bg-blue-600 text-white">V2RAY</button><button data-product="zivpn" onclick="setAdminProductTab('zivpn')" class="admin-tab-btn flex-1 py-2 rounded-lg text-[10px] font-black bg-white/5 text-slate-400">ZIVPN</button><button data-product="netmod" onclick="setAdminProductTab('netmod')" class="admin-tab-btn flex-1 py-2 rounded-lg text-[10px] font-black bg-white/5 text-slate-400">NetMod</button></div><select id="adm-unified-flag" class="input-box text-xs"><option value="th">🇹🇭 THAILAND</option><option value="sg">🇸🇬 SINGAPORE</option></select><input id="adm-unified-sname" placeholder="Server Name" class="input-box text-xs"><input id="adm-unified-sport" placeholder="Port" class="input-box text-xs"><input id="adm-unified-logo" placeholder="Logo URL" class="input-box text-xs"><input id="adm-unified-snote" placeholder="Note" class="input-box text-xs"><textarea id="adm-unified-sconf" placeholder="Config (vmess/vless...)" class="input-box h-32 text-[10px] font-mono"></textarea><button onclick="addUnifiedServer()" class="w-full bg-green-600 py-3 rounded-2xl text-xs font-black">Upload Server</button></div>
+    
+    <div id="adm-server-list-v2box" class="glass p-6 rounded-3xl"></div>
+    <div id="adm-server-list-zivpn" class="glass p-6 rounded-3xl"></div>
+    <div id="adm-server-list-netmod" class="glass p-6 rounded-3xl"></div>
+    <div id="adm-req-list" class="glass p-6 rounded-3xl"></div>
+</div>
+</body>
+</html>

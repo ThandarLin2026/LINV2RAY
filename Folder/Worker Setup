@@ -1,0 +1,8 @@
+Cloudflare dashboard ထဲကနေ ဒီလိုထည့်ပါ—
+Workers & Pages ထဲဝင်
+မင်းရဲ့ dns-manager Worker ကိုဖွင့်
+Settings → Variables
+Add secret ကိုနှိပ်
+Name ကို CF_API_TOKEN လို့ရေး
+Value ထဲမှာ Cloudflare API Token ကိုထည့်
+Save / Deploy

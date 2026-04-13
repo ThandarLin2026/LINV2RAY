@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover" />
+    <title>Cloudflare DNS Dark Manager | Weather + Auto Proxy Off</title>
+
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="DNS Manager">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Pyidaungsu:wght@400;700&display=swap');
+
+        :root {
+            --dark-bg: #0f172a;
+            --card-bg: #1e293b;
+            --border-color: #334155;
+            --cf-orange: #f48120;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: 'Inter', 'Pyidaungsu', sans-serif;
+            background: radial-gradient(circle at top, #172554 0%, var(--dark-bg) 45%);
+            color: #f1f5f9;
+            padding-bottom: 64px;
+        }
+
+        .cf-card {
+            background: rgba(30, 41, 59, 0.96);
+            border: 1px solid var(--border-color);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.22);
+            backdrop-filter: blur(10px);
+        }
+
+        .input-cf {
+            background-color: #0f172a;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px 14px;
+            font-size: 14px;
+            width: 100%;
+            outline: none;
+            color: white;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .input-cf:focus {
+            border-color: var(--cf-orange);
+            box-shadow: 0 0 0 3px rgba(244, 129, 32, 0.15);
+        }
+
+        .btn-cf-primary {
+            background: linear-gradient(180deg, #ff9a3d, #f48120);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 14px;
+            transition: transform 0.2s, filter 0.2s;
+        }
+
+        .btn-cf-primary:hover {
+            filter: brightness(1.08);
+            transform: translateY(-1px);
+        }
+
+        .btn-cf-primary:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .status-pulse {
+            width: 10px;
+            height: 10px;
+            background-color: #10b981;
+            border-radius: 50%;
+            position: relative;
+            flex: 0 0 auto;
+        }
+        .status-pulse::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background-color: #10b981;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.85; }
+            100% { transform: scale(3.2); opacity: 0; }
+        }
+
+        .tag-type {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #334155;
+            border: 1px solid #475569;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 800;
+            border-radius: 6px;
+            color: #cbd5e1;
+            min-width: 48px;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 42px;
+            height: 24px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #475569;
+            transition: .25s;
+            border-radius: 999px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 18px; width: 18px;
+            left: 3px; bottom: 3px;
+            background-color: white;
+            transition: .25s;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,.25);
+        }
+        input:checked + .slider { background-color: var(--cf-orange); }
+        input:checked + .slider:before { transform: translateX(18px); }
+
+        .records-scroll {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            min-width: 680px;
+        }
+
+        th {
+            text-align: left;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #94a3b8;
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(15, 23, 42, 0.55);
+            white-space: nowrap;
+        }
+
+        td {
+            padding: 16px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 13px;
+            vertical-align: middle;
+        }
+
+        .copy-btn {
+            color: #64748b;
+            cursor: pointer;
+            transition: color 0.2s, transform 0.2s;
+        }
+        .copy-btn:hover {
+            color: var(--cf-orange);
+            transform: scale(1.05);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+            visibility: hidden;
+            opacity: 0;
+            transition: visibility 0.2s, opacity 0.2s;
+        }
+        .modal-overlay.active {
+            visibility: visible;
+            opacity: 1;
+        }
+        .modal-container {
+            background: #1e293b;
+            border: 1px solid #f48120;
+            border-radius: 28px;
+            max-width: 480px;
+            width: 90%;
+            padding: 1.8rem;
+            box-shadow: 0 25px 40px rgba(0,0,0,0.6);
+        }
+
+        .proxy-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .06em;
+            white-space: nowrap;
+        }
+        .proxy-on { color: var(--cf-orange); }
+        .proxy-off { color: #64748b; }
+
+        .search-clear {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #64748b;
+            transition: color 0.2s, transform 0.2s;
+        }
+        .search-clear:hover {
+            color: var(--cf-orange);
+            transform: translateY(-50%) scale(1.08);
+        }
+
+        .ip-card {
+            background: rgba(15, 23, 42, 0.7);
+            border-radius: 1rem;
+            border: 1px solid #334155;
+            transition: all 0.2s;
+        }
+        .resolve-spinner {
+            display: inline-block;
+            width: 18px;
+            height: 18px;
+            border: 2px solid #f48120;
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.7s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .info-row {
+            background: #0f172a;
+            border-radius: 14px;
+            padding: 12px 16px;
+            margin-top: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        #installPWA {
+            background: #1e293b;
+            border: 1px solid #f48120;
+            border-radius: 30px;
+            padding: 6px 12px;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        #installPWA:hover {
+            background: #f48120;
+            color: #0f172a;
+        }
+
+        .proxy-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .proxy-logo {
+            width: 20px;
+            height: 20px;
+            object-fit: contain;
+            border-radius: 4px;
+        }
+
+        /* Weather widget styles */
+        .weather-icon-large {
+            font-size: 3rem;
+            filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));
+        }
+        .temp-big {
+            font-size: 2.2rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+        }
+        .hourly-card {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 1.2rem;
+            padding: 0.75rem 1rem;
+            border: 1px solid #334155;
+            transition: all 0.2s;
+        }
+
+        .site-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(15, 23, 42, 0.92);
+            backdrop-filter: blur(12px);
+            border-top: 1px solid #334155;
+            padding: 8px 16px;
+            text-align: center;
+            font-size: 11px;
+            font-weight: 500;
+            color: #94a3b8;
+            z-index: 1050;
+            letter-spacing: 0.3px;
+        }
+        .site-footer span {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .site-footer i {
+            color: #f48120;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Custom Modal for Create Success -->
+    <div id="successModal" class="modal-overlay">
+        <div class="modal-container">
+            <div class="flex items-center gap-3 border-b border-slate-700 pb-3 mb-4">
+                <i class="fas fa-check-circle text-green-500 text-2xl"></i>
+                <h3 class="text-lg font-bold text-white">Create DNS Successfully</h3>
+            </div>
+            <div class="space-y-3">
+                <div class="info-row">
+                    <span class="text-slate-300 text-sm flex items-center gap-2"><i class="fas fa-globe text-orange-400"></i> IP Address:</span>
+                    <div class="flex items-center gap-2">
+                        <span id="modalIpValue" class="font-mono text-white text-sm break-all">-</span>
+                        <button id="copyModalIpBtn" class="copy-btn text-xs"><i class="far fa-copy"></i></button>
+                    </div>
+                </div>
+                <div class="info-row">
+                    <span class="text-slate-300 text-sm flex items-center gap-2"><i class="fas fa-tag text-orange-400"></i> Hostname:</span>
+                    <div class="flex items-center gap-2">
+                        <span id="modalHostnameValue" class="font-mono text-white text-sm break-all">-</span>
+                        <button id="copyModalHostnameBtn" class="copy-btn text-xs"><i class="far fa-copy"></i></button>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end">
+                <button id="closeModalBtn" class="bg-slate-700 hover:bg-slate-600 text-white px-5 py-2 rounded-xl text-sm font-bold transition">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <header class="bg-slate-900/90 border-b border-slate-800 px-4 sm:px-6 h-16 flex items-center justify-between sticky top-0 z-50 backdrop-blur">
+        <div class="flex items-center gap-3 flex-wrap min-w-0">
+            <img src="https://raw.githubusercontent.com/ThandarLin2026/LINV2RAY/main/image/cf.png" alt="Logo" class="h-8 w-8 rounded-full object-cover">
+            <h1 class="font-extrabold text-white text-base tracking-tight">DNS Manager</h1>
+
+            <div class="hidden md:flex items-center gap-2 ml-2 text-xs bg-slate-800/60 rounded-lg px-3 py-1.5 border border-slate-700">
+                <i class="far fa-clock text-slate-400"></i>
+                <span id="serverTime" class="text-slate-200 font-mono">--:--:--</span>
+                <span class="text-slate-500">|</span>
+                <span id="serverDate" class="text-slate-300">--/--/----</span>
+                <span class="text-slate-500">|</span>
+                <span id="serverDay" class="text-slate-300 font-medium">---</span>
+            </div>
+
+            <div class="md:hidden flex items-center text-[10px] bg-slate-800/50 px-2 py-1 rounded">
+                <i class="far fa-clock mr-1 text-orange-400"></i>
+                <span id="mobileServerTime" class="font-mono">--:--</span>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <button id="installPWA" class="hidden text-xs bg-slate-800 text-white px-3 py-1.5 rounded-full border border-orange-500/50">📱 Install App</button>
+            <select id="domainSelector" onchange="changeDomain()" class="text-xs font-bold bg-slate-800 text-slate-300 rounded-lg px-3 py-2 border border-slate-700 outline-none focus:border-orange-500">
+                <option value="linvpn.shop">linvpn.shop</option>
+                <option value="linvpn.site">linvpn.site</option>
+            </select>
+            <button onclick="fetchRecords()" class="bg-slate-800 p-2 rounded-lg border border-slate-700 hover:bg-slate-700 text-slate-300" title="Refresh">
+                <i id="refreshIcon" class="fas fa-sync-alt text-sm"></i>
+            </button>
+        </div>
+    </header>
+
+    <main class="p-4 max-w-5xl mx-auto space-y-6 pb-10">
+        <!-- 🌤️ WEATHER SECTION - TOP (Real-time + Next Hour Forecast) -->
+        <section class="cf-card rounded-2xl overflow-hidden">
+            <div class="p-4 border-b border-slate-700 bg-slate-800/30 flex justify-between items-center flex-wrap gap-2">
+                <div class="flex items-center gap-2">
+                    <i class="fas fa-cloud-sun-rain text-yellow-400 text-lg"></i>
+                    <h2 class="text-sm font-black text-white tracking-tight">🌦️ လက်ရှိရာသီဥတု (Real‑time Weather)</h2>
+                    <span class="text-[10px] bg-emerald-950/40 text-emerald-300 px-2 py-0.5 rounded-full"><i class="fas fa-location-dot"></i> တည်နေရာအလိုက်</span>
+                </div>
+                <button id="refreshWeatherBtn" class="text-xs bg-slate-700 hover:bg-slate-600 px-3 py-1.5 rounded-full transition flex items-center gap-1">
+                    <i class="fas fa-sync-alt text-[10px]"></i> ပြန်လည်ရယူရန်
+                </button>
+            </div>
+            <div id="weatherContainer" class="p-5">
+                <div class="flex justify-center items-center gap-3 py-6">
+                    <div class="resolve-spinner"></div>
+                    <span class="text-slate-300 text-sm">မိုးလေဝသဒေတာ ရယူနေသည်... / Fetching weather...</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Add Record Section -->
+        <section class="cf-card rounded-2xl overflow-hidden">
+            <div class="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/30">
+                <h2 id="formTitle" class="text-xs font-black text-slate-400 uppercase tracking-widest">Add New Record</h2>
+                <button onclick="resetForm()" id="cancelBtn" class="hidden text-[11px] text-blue-400 font-bold uppercase hover:underline">Cancel</button>
+            </div>
+
+            <div class="p-5 grid grid-cols-1 md:grid-cols-4 gap-5 items-end">
+                <input type="hidden" id="editId">
+
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-2 uppercase tracking-tighter">Type</label>
+                    <select id="recordType" class="input-cf">
+                        <option value="A">A</option>
+                        <option value="AAAA">AAAA</option>
+                        <option value="CNAME">CNAME</option>
+                        <option value="HTTPS">HTTPS</option>
+                        <option value="TXT">TXT</option>
+                        <option value="SRV">SRV</option>
+                        <option value="MX">MX</option>
+                        <option value="NS">NS</option>
+                        <option value="PTR">PTR</option>
+                        <option value="CAA">CAA</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-2 uppercase tracking-tighter">Name (e.g. @)</label>
+                    <input type="text" id="recordName" class="input-cf" placeholder="e.g. @">
+                </div>
+
+                <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-2 uppercase tracking-tighter">Content / IP</label>
+                    <input type="text" id="recordContent" class="input-cf" placeholder="e.g. 192.0.2.1">
+                </div>
+
+                <div class="flex flex-col gap-3">
+                    <div class="flex items-center justify-between px-1">
+                        <span class="proxy-label text-[11px] font-bold text-slate-500 uppercase tracking-tighter">
+                            <img src="https://raw.githubusercontent.com/ThandarLin2026/LINV2RAY/main/image/cf.png" alt="logo" class="proxy-logo">
+                            Proxy Status
+                        </span>
+                        <label class="switch">
+                            <input type="checkbox" id="recordProxy">
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <button onclick="saveRecord()" id="saveBtn" class="btn-cf-primary w-full shadow-lg shadow-orange-500/20">Save Record</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Hostname To IP Lookup -->
+        <section class="cf-card rounded-2xl overflow-hidden">
+            <div class="p-4 border-b border-slate-700 bg-slate-800/30 flex items-center gap-2">
+                <i class="fas fa-globe text-orange-500 text-lg"></i>
+                <h2 class="text-sm font-black text-white tracking-tight">Hostname To IP Lookup (တည်နေရာ + ဝန်ဆောင်မှုပေးသူ)</h2>
+                <span class="text-[10px] text-slate-400 ml-auto bg-slate-700/50 px-2 py-1 rounded-full">Auto detect your IP</span>
+            </div>
+            <div class="p-5 space-y-5">
+                <div class="flex flex-col md:flex-row gap-3">
+                    <div class="flex-1 relative">
+                        <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="hostInput" class="input-cf pl-9" placeholder="Domain or IP (e.g., google.com, 8.8.8.8)" value="">
+                    </div>
+                    <button id="resolveBtn" class="btn-cf-primary px-6 w-full md:w-auto flex items-center justify-center gap-2">
+                        <i class="fas fa-arrow-right"></i> Resolve & Show Location
+                    </button>
+                </div>
+                <div id="lookupResult" class="space-y-3 text-sm">
+                    <div class="text-slate-400 text-center py-6 flex flex-col items-center gap-2">
+                        <i class="fas fa-cloud-moon text-2xl opacity-40"></i>
+                        <span>Detecting your network IP & location automatically...</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Status & Records -->
+        <div class="flex items-center justify-between px-2 gap-3">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="status-pulse"></div>
+                <div class="flex flex-col min-w-0">
+                    <span id="displayDomain" class="text-sm font-bold text-white tracking-tight truncate">linvpn.shop</span>
+                    <span class="text-[10px] text-emerald-500 font-black uppercase tracking-widest">Live Status</span>
+                </div>
+            </div>
+            <div id="recordCount" class="text-[10px] font-bold text-slate-500 bg-slate-800 px-3 py-1 rounded-full border border-slate-700 uppercase tracking-tighter whitespace-nowrap">
+                0 Records
+            </div>
+        </div>
+
+        <div class="relative mt-2 px-2">
+            <div class="relative">
+                <i class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                <input type="text" id="searchInput" placeholder="Search by Name, IP, or Domain..." class="input-cf pl-9 pr-10 text-sm bg-slate-900/60">
+                <div id="clearSearchBtn" class="search-clear hidden" title="Clear search">
+                    <i class="fas fa-times-circle text-sm"></i>
+                </div>
+            </div>
+            <p class="text-[10px] text-slate-500 mt-1 ml-1"><i class="fas fa-filter"></i> Filter records by name or content</p>
+        </div>
+
+        <section class="cf-card rounded-2xl overflow-hidden">
+            <div class="records-scroll">
+                <table>
+                    <thead>
+                        <tr><th>Type</th><th>Name</th><th>Content</th><th>Proxying</th><th class="text-right">Action</th></tr>
+                    </thead>
+                    <tbody id="recordsContainer">
+                        <tr><td colspan="5" class="py-20 text-center"><i class="fas fa-circle-notch fa-spin text-orange-500 text-2xl"></i><div>Loading...</div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <span><i class="fas fa-copyright"></i> LINVPN DNS CREATOR | <i class="fas fa-cloud-sun"></i> Intelligent DNS Management</span>
+    </footer>
+
+    <script>
+        // ---------- PWA & Core DNS Functions (kept intact) ----------
+        (function() { /* PWA manifest & service worker */ 
+            const manifestData = { name: "Cloudflare DNS Manager", short_name: "DNS Manager", start_url: ".", display: "standalone", theme_color: "#0f172a", background_color: "#0f172a", icons: [{ src: "https://raw.githubusercontent.com/ThandarLin2026/LINV2RAY/main/image/cf.png", sizes: "192x192", type: "image/png" }, { src: "https://raw.githubusercontent.com/ThandarLin2026/LINV2RAY/main/image/cf.png", sizes: "512x512", type: "image/png" }] };
+            const manifestBlob = new Blob([JSON.stringify(manifestData)], {type: "application/json"});
+            const manifestURL = URL.createObjectURL(manifestBlob);
+            const manifestLink = document.querySelector('link[rel="manifest"]');
+            if (manifestLink) manifestLink.href = manifestURL;
+            if ('serviceWorker' in navigator) { const swCode = `self.addEventListener('install', event => { self.skipWaiting(); event.waitUntil(caches.open('dns-v1').then(cache => cache.addAll(['/']))) }); self.addEventListener('fetch', event => { event.respondWith(caches.match(event.request).then(res => res || fetch(event.request))) });`; const swBlob = new Blob([swCode], {type: "application/javascript"}); const swURL = URL.createObjectURL(swBlob); navigator.serviceWorker.register(swURL).catch(e => console.warn); }
+            let deferredPrompt;
+            window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; const installBtn = document.getElementById('installPWA'); if (installBtn) installBtn.classList.remove('hidden'); installBtn?.addEventListener('click', async () => { if (deferredPrompt) { deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt = null; installBtn.classList.add('hidden'); } }); });
+        })();
+
+        const DOMAINS = { "linvpn.shop": { zoneId: "4ccdd712231c994e57135420400f7645" }, "linvpn.site": { zoneId: "8d817d0fa5e946e0e54804c56232accd" } };
+        const WORKER_URL = "https://dns-manager.linvpn2026.workers.dev";
+        let currentDomain = "linvpn.shop";
+        let allRecords = [];
+
+        // Modal handlers
+        const modal = document.getElementById('successModal');
+        const modalIpSpan = document.getElementById('modalIpValue');
+        const modalHostnameSpan = document.getElementById('modalHostnameValue');
+        const closeModalBtn = document.getElementById('closeModalBtn');
+        const copyModalIpBtn = document.getElementById('copyModalIpBtn');
+        const copyModalHostnameBtn = document.getElementById('copyModalHostnameBtn');
+        function showSuccessModal(ip, fullHostname) { modalIpSpan.innerText = ip; modalHostnameSpan.innerText = fullHostname; modal.classList.add('active'); }
+        function hideModal() { modal.classList.remove('active'); }
+        copyModalIpBtn?.addEventListener('click', () => { const ip = modalIpSpan.innerText; if(ip && ip !== '-') copyText(ip); });
+        copyModalHostnameBtn?.addEventListener('click', () => { const hn = modalHostnameSpan.innerText; if(hn && hn !== '-') copyText(hn); });
+        closeModalBtn?.addEventListener('click', hideModal);
+        modal?.addEventListener('click', (e) => { if(e.target === modal) hideModal(); });
+
+        function updateServerTime() { const now = new Date(); const hours = String(now.getHours()).padStart(2,'0'); const minutes = String(now.getMinutes()).padStart(2,'0'); const seconds = String(now.getSeconds()).padStart(2,'0'); const day = String(now.getDate()).padStart(2,'0'); const month = String(now.getMonth()+1).padStart(2,'0'); const year = now.getFullYear(); const weekdays = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday']; if(document.getElementById('serverTime')) document.getElementById('serverTime').innerText = `${hours}:${minutes}:${seconds}`; if(document.getElementById('serverDate')) document.getElementById('serverDate').innerText = `${day}/${month}/${year}`; if(document.getElementById('serverDay')) document.getElementById('serverDay').innerText = weekdays[now.getDay()]; if(document.getElementById('mobileServerTime')) document.getElementById('mobileServerTime').innerText = `${hours}:${minutes}`; }
+        updateServerTime(); setInterval(updateServerTime,1000);
+
+        async function copyText(text) { try { if (navigator.clipboard && window.isSecureContext) await navigator.clipboard.writeText(text); else { const ta = document.createElement('textarea'); ta.value = text; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } const toastDiv = document.createElement('div'); toastDiv.innerText='Copied!'; toastDiv.style.position='fixed'; toastDiv.style.bottom='20px'; toastDiv.style.left='50%'; toastDiv.style.transform='translateX(-50%)'; toastDiv.style.background='#10b981'; toastDiv.style.padding='8px 16px'; toastDiv.style.borderRadius='20px'; toastDiv.style.zIndex='9999'; toastDiv.style.fontSize='12px'; document.body.appendChild(toastDiv); setTimeout(()=> toastDiv.remove(),1200); } catch(e){ alert("Copy failed"); } }
+        function escapeHtml(str) { return String(str??'').replace(/[&<>]/g, function(m){ if(m==='&') return '&amp;'; if(m==='<') return '&lt;'; if(m==='>') return '&gt;'; return m;}); }
+        function changeDomain() { currentDomain = document.getElementById('domainSelector').value; document.getElementById('displayDomain').innerText = currentDomain; document.getElementById('searchInput').value = ''; toggleClearButton(); resetForm(); fetchRecords(); }
+        function toggleClearButton() { const inp = document.getElementById('searchInput'); const clearBtn = document.getElementById('clearSearchBtn'); if (inp && clearBtn) inp.value.trim().length > 0 ? clearBtn.classList.remove('hidden') : clearBtn.classList.add('hidden'); }
+        function clearSearch() { const inp = document.getElementById('searchInput'); if(inp) { inp.value = ''; toggleClearButton(); renderRecords(allRecords); } }
+        function applyFilter() { const term = document.getElementById('searchInput').value.trim().toLowerCase(); toggleClearButton(); if (!allRecords.length) { renderRecords([]); return; } const filtered = term === '' ? allRecords : allRecords.filter(r => String(r.name??'').toLowerCase().includes(term) || String(r.content??'').toLowerCase().includes(term) || String(r.type??'').toLowerCase().includes(term)); renderRecords(filtered); }
+        function renderRecords(records) { const container = document.getElementById('recordsContainer'); const total = allRecords.length; const filteredCount = records.length; const term = document.getElementById('searchInput').value.trim(); document.getElementById('recordCount').innerText = term === '' ? `${total} Records` : `${filteredCount} / ${total} Records`; if (!records.length) { container.innerHTML = total === 0 ? `<tr><td colspan="5" class="py-20 text-center text-slate-500 italic">No DNS records found.</td></tr>` : `<tr><td colspan="5" class="py-20 text-center text-slate-400"><i class="fas fa-filter mr-2"></i> No matching records for "${escapeHtml(term)}"</td></tr>`; return; } container.innerHTML = records.map(rec => `<tr class="hover:bg-slate-800/40 transition-colors"><td><span class="tag-type">${escapeHtml(rec.type)}</span></td><td><div class="flex items-center gap-2 min-w-0"><span class="font-bold text-blue-400 truncate max-w-[160px]">${escapeHtml(rec.name)}</span><button onclick='copyText(${JSON.stringify(rec.name??"")})' class="copy-btn"><i class="far fa-copy"></i></button></div></td><td><div class="text-slate-400 font-mono text-[12px] break-all max-w-[260px]">${escapeHtml(rec.content)}</div></td><td><div class="proxy-badge ${rec.proxied ? 'proxy-on' : 'proxy-off'}"><i class="fas fa-cloud text-xs"></i><span>${rec.proxied ? 'Proxied' : 'DNS Only'}</span></div></td><td class="text-right space-x-3"><button onclick='editRecord(${JSON.stringify(rec.id)})' class="text-slate-400 hover:text-white"><i class="fas fa-edit"></i></button><button onclick='deleteRecord(${JSON.stringify(rec.id)})' class="text-slate-500 hover:text-red-500"><i class="fas fa-trash-alt"></i></button></td></tr>`).join(''); }
+        async function cfFetch(path, method='GET', body=null) { const url = `${WORKER_URL}/zones/${DOMAINS[currentDomain].zoneId}${path}`; const options = { method, mode:'cors', cache:'no-store', headers:{'Content-Type':'application/json'} }; if(body) options.body = JSON.stringify(body); const res = await fetch(url, options); const text = await res.text(); let data; try { data = JSON.parse(text); } catch { throw new Error(text || 'Invalid response'); } if (data.success === true) return data; throw new Error(data.errors?.[0]?.message || data.message || 'API error'); }
+        async function fetchRecords() { const icon = document.getElementById('refreshIcon'); if(icon) icon.classList.add('fa-spin'); const container = document.getElementById('recordsContainer'); if(container) container.innerHTML = `<tr><td colspan="5" class="py-20 text-center"><i class="fas fa-circle-notch fa-spin text-orange-500 text-2xl"></i><div>Loading...</div></td></tr>`; try { const data = await cfFetch('/dns_records?per_page=100'); allRecords = data.result || []; applyFilter(); } catch(err) { if(container) container.innerHTML = `<tr><td colspan="5" class="py-20 text-red-400 text-center">${escapeHtml(err.message)}</td></tr>`; document.getElementById('recordCount').innerText='Error'; } finally { if(icon) icon.classList.remove('fa-spin'); } }
+        async function saveRecord() { const id = document.getElementById('editId').value.trim(); const type = document.getElementById('recordType').value.trim(); const name = document.getElementById('recordName').value.trim(); const content = document.getElementById('recordContent').value.trim(); const proxied = document.getElementById('recordProxy').checked; if (!name || !content) { alert('Please fill both Name and Content.'); return; } const payload = { type, name, content, proxied, ttl: 1 }; const btn = document.getElementById('saveBtn'); const original = btn.innerText; btn.disabled = true; btn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Processing...'; try { if (id) await cfFetch(`/dns_records/${id}`, 'PUT', payload); else { await cfFetch('/dns_records', 'POST', payload); let fullHost = name === '@' ? currentDomain : `${name}.${currentDomain}`; showSuccessModal(content, fullHost); } resetForm(); await fetchRecords(); } catch(err) { alert('Error: ' + err.message); } finally { btn.disabled = false; btn.innerText = original; } }
+        function editRecord(id) { const rec = allRecords.find(r => r.id === id); if(!rec) return; document.getElementById('editId').value = rec.id; document.getElementById('recordType').value = rec.type; document.getElementById('recordName').value = rec.name; document.getElementById('recordContent').value = rec.content; document.getElementById('recordProxy').checked = !!rec.proxied; document.getElementById('formTitle').innerText = 'Edit Record'; document.getElementById('saveBtn').innerText = 'Update Record'; document.getElementById('cancelBtn').classList.remove('hidden'); window.scrollTo({ top: 0, behavior: 'smooth' }); }
+        function resetForm() { document.getElementById('editId').value = ''; document.getElementById('recordType').value = 'A'; document.getElementById('recordName').value = ''; document.getElementById('recordContent').value = ''; document.getElementById('recordProxy').checked = false; document.getElementById('formTitle').innerText = 'Add New Record'; document.getElementById('saveBtn').innerText = 'Save Record'; document.getElementById('cancelBtn').classList.add('hidden'); }
+        async function deleteRecord(id) { if(!confirm('Delete this record?')) return; try { await cfFetch(`/dns_records/${id}`, 'DELETE'); await fetchRecords(); } catch(err) { alert('Delete failed: ' + err.message); } }
+
+        // ----- Weather: location-based + current + next hour forecast -----
+        async function fetchWeatherData(lat, lon, locationName) {
+            try {
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&hourly=temperature_2m,weathercode,precipitation_probability&timezone=auto&forecast_hours=2`;
+                const res = await fetch(url);
+                const data = await res.json();
+                if (!data.current_weather) throw new Error('No current weather');
+                const current = data.current_weather;
+                const temp = current.temperature;
+                const weatherCode = current.weathercode;
+                let weatherDesc = 'Clear', iconEmoji = '☀️';
+                if (weatherCode === 0) { weatherDesc = 'Clear sky'; iconEmoji = '☀️'; }
+                else if (weatherCode === 1 || weatherCode === 2) { weatherDesc = 'Mainly clear'; iconEmoji = '⛅'; }
+                else if (weatherCode === 3) { weatherDesc = 'Overcast'; iconEmoji = '☁️'; }
+                else if (weatherCode >= 45 && weatherCode <= 48) { weatherDesc = 'Fog'; iconEmoji = '🌫️'; }
+                else if (weatherCode >= 51 && weatherCode <= 55) { weatherDesc = 'Drizzle'; iconEmoji = '🌦️'; }
+                else if (weatherCode >= 61 && weatherCode <= 65) { weatherDesc = 'Rain'; iconEmoji = '🌧️'; }
+                else if (weatherCode >= 71 && weatherCode <= 77) { weatherDesc = 'Snow'; iconEmoji = '❄️'; }
+                else if (weatherCode >= 80 && weatherCode <= 82) { weatherDesc = 'Rain showers'; iconEmoji = '🌦️'; }
+                else if (weatherCode >= 95 && weatherCode <= 99) { weatherDesc = 'Thunderstorm'; iconEmoji = '⛈️'; }
+                // Next hour forecast (index 1 if available)
+                let nextHour = null;
+                if (data.hourly && data.hourly.time && data.hourly.time.length >= 2) {
+                    const nextTemp = data.hourly.temperature_2m[1];
+                    const nextCode = data.hourly.weathercode[1];
+                    const nextPrecip = data.hourly.precipitation_probability ? data.hourly.precipitation_probability[1] : 0;
+                    let nextDesc = '';
+                    if (nextCode === 0) nextDesc = 'Clear';
+                    else if (nextCode === 1 || nextCode === 2) nextDesc = 'Partly cloudy';
+                    else if (nextCode === 3) nextDesc = 'Overcast';
+                    else if (nextCode >= 45 && nextCode <= 48) nextDesc = 'Fog';
+                    else if (nextCode >= 51 && nextCode <= 55) nextDesc = 'Drizzle';
+                    else if (nextCode >= 61 && nextCode <= 65) nextDesc = 'Rain';
+                    else if (nextCode >= 71 && nextCode <= 77) nextDesc = 'Snow';
+                    else if (nextCode >= 80 && nextCode <= 82) nextDesc = 'Rain showers';
+                    else if (nextCode >= 95 && nextCode <= 99) nextDesc = 'Thunder';
+                    else nextDesc = 'Mixed';
+                    nextHour = { temp: Math.round(nextTemp), desc: nextDesc, precipProb: nextPrecip };
+                }
+                return { temp: Math.round(temp), weatherDesc, iconEmoji, location: locationName, nextHour };
+            } catch (err) { throw new Error('Weather API error'); }
+        }
+
+        async function updateWeatherWidgetWithLocation() {
+            const weatherDiv = document.getElementById('weatherContainer');
+            weatherDiv.innerHTML = `<div class="flex justify-center items-center gap-3 py-6"><div class="resolve-spinner"></div><span class="text-slate-300">တည်နေရာခွင့်ပြုချက် တောင်းဆိုနေသည်... / Requesting location...</span></div>`;
+            
+            const getCoordsFromIP = async () => {
+                try {
+                    const ipRes = await fetch('https://api.ipify.org?format=json');
+                    const { ip } = await ipRes.json();
+                    const geoRes = await fetch(`https://ipapi.co/${ip}/json/`);
+                    const geo = await geoRes.json();
+                    if (geo.latitude && geo.longitude) {
+                        const city = geo.city || geo.region || geo.country_name || 'Your area';
+                        return { lat: geo.latitude, lon: geo.longitude, name: city };
+                    }
+                    throw new Error('IP geolocation failed');
+                } catch { return null; }
+            };
+
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(async (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    try {
+                        const reverseGeo = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10&addressdetails=0`);
+                        const geoData = await reverseGeo.json();
+                        let locationName = geoData.display_name?.split(',')[0] || `Lat ${lat.toFixed(1)}`;
+                        const weather = await fetchWeatherData(lat, lon, locationName);
+                        displayWeather(weather);
+                    } catch (err) { 
+                        const fallback = await getCoordsFromIP();
+                        if (fallback) {
+                            const weather = await fetchWeatherData(fallback.lat, fallback.lon, fallback.name);
+                            displayWeather(weather);
+                        } else { weatherDiv.innerHTML = `<div class="text-red-400 text-center py-6"><i class="fas fa-exclamation-triangle"></i> မိုးလေဝသဒေတာ ရယူ၍မရပါ။<br><button onclick="updateWeatherWidgetWithLocation()" class="text-orange-400 underline mt-2">ပြန်စမ်းရန်</button></div>`; }
+                    }
+                }, async (error) => {
+                    console.warn("Geolocation error, fallback to IP");
+                    const fallback = await getCoordsFromIP();
+                    if (fallback) {
+                        const weather = await fetchWeatherData(fallback.lat, fallback.lon, fallback.name);
+                        displayWeather(weather);
+                    } else { weatherDiv.innerHTML = `<div class="text-red-400 text-center">တည်နေရာခွင့်ပြုချက် ငြင်းပယ်ထားပြီး IP ဖြင့်လည်း မရရှိနိုင်ပါ။ ခွင့်ပြုပြီး ပြန်လည်စမ်းသပ်ပါ။<br><button onclick="updateWeatherWidgetWithLocation()" class="text-orange-400 underline mt-2">ထပ်မံကြိုးစားရန်</button></div>`; }
+                });
+            } else {
+                const fallback = await getCoordsFromIP();
+                if (fallback) {
+                    const weather = await fetchWeatherData(fallback.lat, fallback.lon, fallback.name);
+                    displayWeather(weather);
+                } else { weatherDiv.innerHTML = `<div class="text-center text-red-400">သင့်ဘရောက်ဆာသည် တည်နေရာ ပံ့ပိုးမှုမရှိပါ။</div>`; }
+            }
+        }
+
+        function displayWeather(weather) {
+            const weatherDiv = document.getElementById('weatherContainer');
+            const nextHourHtml = weather.nextHour ? `
+                <div class="hourly-card flex items-center justify-between gap-3 mt-4">
+                    <div class="flex items-center gap-3"><i class="fas fa-hourglass-half text-orange-400 text-xl"></i><span class="text-sm font-bold text-slate-200">လာမည့် ၁ နာရီအတွင်း / Next Hour</span></div>
+                    <div class="flex items-center gap-4">
+                        <div><span class="text-2xl font-bold text-white">${weather.nextHour.temp}°C</span><span class="text-slate-400 text-xs ml-1">temp</span></div>
+                        <div><span class="text-slate-300 text-sm">${weather.nextHour.desc}</span></div>
+                        <div><span class="text-emerald-300 text-sm"><i class="fas fa-tint"></i> ${weather.nextHour.precipProb}%</span></div>
+                    </div>
+                </div>
+            ` : `<div class="text-center text-slate-400 text-xs mt-3">နောက်တစ်နာရီခန့်မှန်းချက် မရရှိနိုင်ပါ</div>`;
+            weatherDiv.innerHTML = `
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div class="flex items-center gap-4">
+                        <div class="weather-icon-large">${weather.iconEmoji}</div>
+                        <div><span class="temp-big text-white">${weather.temp}°C</span><div class="text-slate-300 text-sm mt-1">${weather.weatherDesc}</div></div>
+                    </div>
+                    <div class="text-left md:text-right">
+                        <div class="font-bold text-white text-lg flex items-center gap-2"><i class="fas fa-map-pin text-orange-400"></i> ${escapeHtml(weather.location)}</div>
+                        <div class="text-slate-400 text-xs mt-1"><i class="far fa-clock"></i> ယခုအချိန် ရာသီဥတု</div>
+                    </div>
+                </div>
+                ${nextHourHtml}
+            `;
+        }
+
+        // Hostname to IP lookup functions (simplified but fully functional)
+        async function resolveDnsOverHttps(hostname) { const ips = []; try { const [resA, resAAAA] = await Promise.all([ fetch(`https://dns.google/resolve?name=${encodeURIComponent(hostname)}&type=A`), fetch(`https://dns.google/resolve?name=${encodeURIComponent(hostname)}&type=AAAA`) ]); const dataA = await resA.json(); if(dataA.Answer) dataA.Answer.forEach(ans => { if(ans.type === 1) ips.push({ ip: ans.data, version: 4 }); }); const dataAAAA = await resAAAA.json(); if(dataAAAA.Answer) dataAAAA.Answer.forEach(ans => { if(ans.type === 28) ips.push({ ip: ans.data, version: 6 }); }); } catch(e) { console.warn(e); } return ips; }
+        async function getIpLocation(ip) { try { const response = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/json/`); if (!response.ok) throw new Error(); const data = await response.json(); if (data.error) throw new Error(); const city = data.city || ''; const region = data.region || ''; const country = data.country_name || ''; let locationParts = []; if (city) locationParts.push(city); if (region && region !== city) locationParts.push(region); if (country) locationParts.push(country); const location = locationParts.length ? locationParts.join(', ') : 'Unknown location'; const provider = data.org || data.isp || 'Unknown ISP'; const asn = data.asn ? `AS${data.asn}` : ''; return { location, provider, as: asn }; } catch { try { const fallbackRes = await fetch(`https://ip-api.com/json/${encodeURIComponent(ip)}?fields=status,country,regionName,city,isp,org,as`); const fallbackData = await fallbackRes.json(); if (fallbackData.status === 'success') { const location = `${fallbackData.city || ''}${fallbackData.city && fallbackData.regionName ? ', ' : ''}${fallbackData.regionName || ''}${(fallbackData.city || fallbackData.regionName) && fallbackData.country ? ', ' : ''}${fallbackData.country || ''}`.replace(/^, /, ''); const provider = fallbackData.isp || fallbackData.org || 'Unknown ISP'; return { location: location || 'Unknown', provider, as: fallbackData.as || '' }; } } catch(e) {} return { location: 'Location lookup failed', provider: 'Could not retrieve ISP', as: '' }; } }
+        async function performHostLookup(manualInput = null) { let rawInput = manualInput !== null ? manualInput : document.getElementById('hostInput').value.trim(); if (!rawInput) return; const resultDiv = document.getElementById('lookupResult'); resultDiv.innerHTML = `<div class="flex justify-center items-center gap-3 py-8"><div class="resolve-spinner"></div><span class="text-slate-300">Resolving ${escapeHtml(rawInput)} ...</span></div>`; let ipsToCheck = []; const isIpv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(rawInput); const isIpv6 = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/.test(rawInput); if (isIpv4 || isIpv6) ipsToCheck = [{ ip: rawInput, version: isIpv4 ? 4 : 6 }]; else ipsToCheck = await resolveDnsOverHttps(rawInput); if (ipsToCheck.length === 0) { resultDiv.innerHTML = `<div class="bg-red-900/20 border border-red-700 rounded-xl p-4 text-red-300 text-center"><i class="fas fa-exclamation-triangle mr-2"></i> No A/AAAA records found for "${escapeHtml(rawInput)}"</div>`; return; } let resultsHtml = `<div class="space-y-4"><div class="text-emerald-400 text-xs font-bold uppercase tracking-wider flex items-center gap-2"><i class="fas fa-network-wired"></i> Found ${ipsToCheck.length} IP address(es) for ${escapeHtml(rawInput)}</div>`; for (let idx = 0; idx < ipsToCheck.length; idx++) { const { ip, version } = ipsToCheck[idx]; const geo = await getIpLocation(ip); resultsHtml += `<div class="ip-card p-4 rounded-xl"><div class="flex flex-wrap justify-between items-start gap-2"><div class="flex items-center gap-3"><i class="fas fa-${version === 4 ? 'ethernet' : 'wifi'} text-orange-400 text-lg"></i><div><span class="font-mono font-bold text-white text-base">${escapeHtml(ip)}</span><span class="text-[10px] bg-slate-700 ml-2 px-2 py-0.5 rounded-full">IPv${version}</span></div><button onclick='copyText("${escapeHtml(ip)}")' class="copy-btn ml-1"><i class="far fa-copy"></i></button></div></div><div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 text-xs"><div><i class="fas fa-map-marker-alt text-slate-400"></i> ${escapeHtml(geo.location)}</div><div><i class="fas fa-building"></i> ${escapeHtml(geo.provider)}</div>${geo.as ? `<div><i class="fas fa-chart-line"></i> ${escapeHtml(geo.as)}</div>` : ''}</div></div>`; } resultsHtml += `</div>`; resultDiv.innerHTML = resultsHtml; }
+        async function autoDetectAndShowMyIP() { try { const res = await fetch('https://api.ipify.org?format=json'); const data = await res.json(); const myIP = data.ip; if (myIP) { document.getElementById('hostInput').value = myIP; await performHostLookup(myIP); } else document.getElementById('lookupResult').innerHTML = `<div class="text-red-400 text-center">Unable to detect IP automatically</div>`; } catch(err) { document.getElementById('lookupResult').innerHTML = `<div class="text-red-400 text-center">Auto IP detection failed</div>`; } }
+
+        window.addEventListener('load', () => {
+            document.getElementById('displayDomain').innerText = currentDomain;
+            document.getElementById('domainSelector').value = currentDomain;
+            document.getElementById('recordProxy').checked = false;
+            fetchRecords();
+            const searchInput = document.getElementById('searchInput');
+            if(searchInput) { searchInput.addEventListener('input', applyFilter); searchInput.addEventListener('keydown', (e) => { if(e.key === 'Escape') clearSearch(); }); }
+            document.getElementById('clearSearchBtn')?.addEventListener('click', clearSearch);
+            document.getElementById('resolveBtn')?.addEventListener('click', () => { const val = document.getElementById('hostInput').value.trim(); if(val) performHostLookup(val); });
+            document.getElementById('hostInput')?.addEventListener('keypress', (e) => { if(e.key === 'Enter') { const val = e.target.value.trim(); if(val) performHostLookup(val); } });
+            autoDetectAndShowMyIP();
+            updateWeatherWidgetWithLocation();
+            document.getElementById('refreshWeatherBtn')?.addEventListener('click', updateWeatherWidgetWithLocation);
+        });
+    </script>
+</body>
+</html>

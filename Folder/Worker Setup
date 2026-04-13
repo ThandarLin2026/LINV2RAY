@@ -6,3 +6,9 @@ Add secret ကိုနှိပ်
 Name ကို CF_API_TOKEN လို့ရေး
 Value ထဲမှာ Cloudflare API Token ကိုထည့်
 Save / Deploy
+
+
+ပြီးရင် token value ကို paste လုပ်ပြီး Enter နှိပ်ပါ။
+နောက်တစ်ခု သေချာစစ်ရမယ့်အချက်က token permission ပါ။ အနည်းဆုံး ဒီ ၂ ခုလိုတယ်—
+Zone -> DNS -> Edit
+Zone -> Zone -> Read

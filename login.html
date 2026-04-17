@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Login - X-UI Topup</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="bg-white p-8 rounded shadow-md w-96">
+        <h2 class="text-2xl font-bold mb-6">X-UI Topup System</h2>
+        <input type="email" id="email" placeholder="Email" class="w-full p-2 border rounded mb-3">
+        <input type="password" id="password" placeholder="Password" class="w-full p-2 border rounded mb-3">
+        <button onclick="login()" class="w-full bg-blue-500 text-white py-2 rounded mb-2">Login</button>
+        <button onclick="register()" class="w-full bg-green-500 text-white py-2 rounded">Register</button>
+        <p id="msg" class="text-red-500 mt-2 text-sm"></p>
+    </div>
+    <script>
+        const WORKER_URL = 'https://x-ui.linvpn2026.workers.dev'; // သင်၏ worker URL
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            const res = await fetch(`${WORKER_URL}/api/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: pass })
+            });
+            const data = await res.json();
+            if (data.token) {
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('role', data.role);
+                localStorage.setItem('userId', data.userId);
+                if (data.role === 'admin') window.location.href = '/admin.html';
+                else window.location.href = '/user.html';
+            } else {
+                document.getElementById('msg').innerText = 'Login failed';
+            }
+        }
+
+        async function register() {
+            const email = document.getElementById('email').value;
+            const pass = document.getElementById('password').value;
+            const res = await fetch(`${WORKER_URL}/api/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password: pass })
+            });
+            const data = await res.json();
+            if (data.token) {
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('role', data.role);
+                window.location.href = '/user.html';
+            } else {
+                document.getElementById('msg').innerText = 'Register failed';
+            }
+        }
+    </script>
+</body>
+</html>

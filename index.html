@@ -1,0 +1,1263 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>V2RAY AUTO SHOP BOT</title>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    :root {
+      --bg: #040914;
+      --card-border: rgba(255, 255, 255, 0.16);
+      --text: #f8fcff;
+      --muted: #b7c9df;
+      --accent: #16d9ff;
+      --telegram: #2aabee;
+      --accent-2: #8a5cff;
+      --success: #35f2a5;
+      --warning: #ffd166;
+      --pink: #ff58b7;
+      --shadow: 0 28px 90px rgba(0, 0, 0, 0.46);
+    }
+
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 10% 0%, rgba(22, 217, 255, 0.27), transparent 32%),
+        radial-gradient(circle at 92% 10%, rgba(138, 92, 255, 0.34), transparent 34%),
+        radial-gradient(circle at 45% 100%, rgba(53, 242, 165, 0.13), transparent 34%),
+        linear-gradient(135deg, #030711 0%, #07111f 44%, #0d1833 100%);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .page-glow {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255,255,255,0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.035) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: linear-gradient(to bottom, rgba(0,0,0,0.9), transparent 88%);
+    }
+
+    .floating-orb {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(12px);
+      opacity: .55;
+      pointer-events: none;
+      animation: float 8s ease-in-out infinite;
+    }
+
+    .orb-1 {
+      width: 110px;
+      height: 110px;
+      left: 4%;
+      top: 24%;
+      background: rgba(22,217,255,.14);
+    }
+
+    .orb-2 {
+      width: 150px;
+      height: 150px;
+      right: 5%;
+      bottom: 18%;
+      background: rgba(138,92,255,.15);
+      animation-delay: -3s;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0) scale(1); }
+      50% { transform: translateY(-22px) scale(1.06); }
+    }
+
+    .container {
+      width: min(1160px, calc(100% - 32px));
+      margin: 0 auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 22px 0;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      font-weight: 950;
+      letter-spacing: 0.3px;
+    }
+
+    .logo-circle {
+      width: 58px;
+      height: 58px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(145deg, #16d9ff, #8a5cff 62%, #ff58b7);
+      box-shadow:
+        0 0 0 7px rgba(255,255,255,0.08),
+        0 0 42px rgba(22, 217, 255, 0.36),
+        0 22px 54px rgba(0,0,0,0.32);
+      border: 1px solid rgba(255,255,255,0.46);
+      overflow: hidden;
+    }
+
+    .logo-circle img {
+      width: 100%;
+      height: 100%;
+      border-radius: 999px;
+      object-fit: cover;
+      display: block;
+      padding: 3px;
+    }
+
+    .brand-text span {
+      display: block;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 750;
+      margin-top: 2px;
+    }
+
+    .pill {
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      backdrop-filter: blur(18px);
+      padding: 11px 15px;
+      border-radius: 999px;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 850;
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      box-shadow: 0 14px 30px rgba(0,0,0,.18);
+    }
+
+    .telegram-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 23px;
+      height: 23px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #33c6ff, #168bd9);
+      flex: 0 0 auto;
+    }
+
+    .telegram-icon svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: 1.08fr 0.92fr;
+      gap: 34px;
+      align-items: center;
+      padding: 58px 0 44px;
+    }
+
+    .hero-card,
+    .visual-card,
+    .section-card {
+      border: 1px solid var(--card-border);
+      background: linear-gradient(180deg, rgba(255,255,255,0.13), rgba(255,255,255,0.055));
+      backdrop-filter: blur(22px);
+      box-shadow: var(--shadow);
+      border-radius: 34px;
+    }
+
+    .hero-card {
+      padding: 46px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero-card::after {
+      content: "";
+      position: absolute;
+      width: 250px;
+      height: 250px;
+      right: -88px;
+      top: -96px;
+      background: radial-gradient(circle, rgba(53,242,165,0.27), transparent 66%);
+      border-radius: 50%;
+    }
+
+    .shine {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(120deg, transparent 5%, rgba(255,255,255,.08), transparent 30%);
+      transform: translateX(-60%);
+      animation: shine 7s ease-in-out infinite;
+      pointer-events: none;
+    }
+
+    @keyframes shine {
+      0%, 55% { transform: translateX(-70%); }
+      100% { transform: translateX(85%); }
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 13px;
+      border-radius: 999px;
+      border: 1px solid rgba(53,242,165,0.32);
+      background: rgba(53,242,165,0.09);
+      color: #caffed;
+      font-size: 13px;
+      font-weight: 850;
+      margin-bottom: 20px;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 99px;
+      background: var(--success);
+      box-shadow: 0 0 18px var(--success);
+    }
+
+    h1 {
+      font-size: clamp(40px, 7vw, 82px);
+      line-height: 0.94;
+      letter-spacing: -3px;
+      margin-bottom: 18px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .gradient-text {
+      background: linear-gradient(90deg, #16d9ff, #ffffff 42%, #35f2a5 72%, #ff58b7);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero p {
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.75;
+      max-width: 650px;
+      margin-bottom: 26px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+      position: relative;
+      z-index: 1;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 15px 21px;
+      border-radius: 18px;
+      font-weight: 950;
+      transition: transform .18s ease, box-shadow .18s ease, border .18s ease;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    .btn:hover {
+      transform: translateY(-3px) scale(1.01);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--telegram), #16d9ff 46%, var(--accent-2));
+      box-shadow: 0 18px 42px rgba(42, 171, 238, 0.28);
+    }
+
+    .btn-secondary {
+      background: rgba(255,255,255,0.08);
+      color: var(--text);
+    }
+
+    .trust-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .trust-chip {
+      padding: 9px 11px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.07);
+      border: 1px solid rgba(255,255,255,.11);
+      color: #ddecff;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .visual-card {
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+      min-height: 460px;
+    }
+
+    .phone {
+      width: min(318px, 86%);
+      margin: 0 auto;
+      border-radius: 42px;
+      padding: 15px;
+      background: linear-gradient(160deg, rgba(255,255,255,0.25), rgba(255,255,255,0.045));
+      border: 1px solid rgba(255,255,255,0.20);
+      box-shadow: 0 34px 95px rgba(0,0,0,0.42);
+      position: relative;
+      z-index: 1;
+    }
+
+    .phone-screen {
+      border-radius: 31px;
+      padding: 22px;
+      min-height: 405px;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(42,171,238,.21), transparent 42%),
+        linear-gradient(180deg, #071326, #101f37);
+      border: 1px solid rgba(255,255,255,0.09);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .bot-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 22px;
+    }
+
+    .avatar {
+      width: 50px;
+      height: 50px;
+      border-radius: 17px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, #35f2a5, #16d9ff);
+      box-shadow: 0 14px 28px rgba(22,217,255,.18);
+    }
+
+    .bot-name strong {
+      display: block;
+    }
+
+    .bot-name small {
+      color: var(--muted);
+    }
+
+    .chat-bubble {
+      margin: 12px 0;
+      padding: 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.09);
+      color: #dcecff;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .chat-bubble.active {
+      background: linear-gradient(135deg, rgba(42,171,238,0.30), rgba(138,92,255,0.22));
+      border-color: rgba(42,171,238,0.36);
+    }
+
+    .status-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .stat {
+      padding: 10px;
+      border-radius: 15px;
+      background: rgba(255,255,255,0.07);
+      text-align: center;
+      border: 1px solid rgba(255,255,255,.07);
+    }
+
+    .stat strong {
+      display: block;
+      color: var(--success);
+      font-size: 16px;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    section {
+      padding: 42px 0;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    .section-title h2 {
+      font-size: clamp(28px, 4vw, 48px);
+      letter-spacing: -1.7px;
+    }
+
+    .packages {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .package-card {
+      padding: 22px;
+      min-height: 238px;
+      border-radius: 28px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.13);
+      position: relative;
+      overflow: hidden;
+      transition: transform .18s ease, background .18s ease, border .18s ease, box-shadow .18s ease;
+    }
+
+    .package-card:hover {
+      transform: translateY(-8px);
+      background: rgba(255,255,255,0.125);
+      border-color: rgba(22,217,255,0.42);
+      box-shadow: 0 24px 60px rgba(22,217,255,.11);
+    }
+
+    .package-card::before {
+      content: "";
+      position: absolute;
+      inset: auto -30px -45px auto;
+      width: 150px;
+      height: 150px;
+      background: radial-gradient(circle, rgba(22,217,255,0.18), transparent 70%);
+    }
+
+    .package-logo {
+      width: 58px;
+      height: 58px;
+      border-radius: 19px;
+      object-fit: cover;
+      display: block;
+      margin-bottom: 18px;
+      border: 1px solid rgba(255,255,255,.17);
+      box-shadow: 0 14px 30px rgba(0,0,0,.22);
+      position: relative;
+      z-index: 1;
+    }
+
+    .icon-box {
+      width: 56px;
+      height: 56px;
+      display: grid;
+      place-items: center;
+      border-radius: 19px;
+      background: linear-gradient(135deg, rgba(22,217,255,0.26), rgba(138,92,255,0.25));
+      border: 1px solid rgba(255,255,255,0.15);
+      margin-bottom: 18px;
+    }
+
+    .icon-box svg {
+      width: 31px;
+      height: 31px;
+    }
+
+    .package-card h3 {
+      font-size: 20px;
+      margin-bottom: 9px;
+      position: relative;
+    }
+
+    .package-card p {
+      color: var(--muted);
+      line-height: 1.58;
+      font-size: 14px;
+      margin-bottom: 16px;
+      position: relative;
+    }
+
+    .price {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(255,209,102,0.13);
+      color: #ffe7a3;
+      font-weight: 950;
+      font-size: 14px;
+      position: relative;
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .call-code {
+      background: linear-gradient(135deg, rgba(53,242,165,.20), rgba(22,217,255,.16));
+      color: #dffff1;
+      border-color: rgba(53,242,165,.26);
+    }
+
+    .apps-grid {
+      display: grid;
+      grid-template-columns: 0.9fr 1.1fr;
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .section-card {
+      padding: 28px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .section-card::before {
+      content: "";
+      position: absolute;
+      inset: -120px auto auto -120px;
+      width: 220px;
+      height: 220px;
+      background: radial-gradient(circle, rgba(255,88,183,.12), transparent 70%);
+      pointer-events: none;
+    }
+
+    .app-list {
+      display: grid;
+      gap: 13px;
+      margin-top: 18px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .app-item {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 15px;
+      border-radius: 21px;
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.11);
+    }
+
+    .app-logo-img {
+      width: 48px;
+      height: 48px;
+      border-radius: 16px;
+      object-fit: cover;
+      flex: 0 0 auto;
+      box-shadow: 0 12px 26px rgba(0,0,0,.22);
+      border: 1px solid rgba(255,255,255,.16);
+    }
+
+    .app-item strong {
+      display: block;
+      margin-bottom: 3px;
+    }
+
+    .app-item span {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .platform-badges {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 15px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .platform-card {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 22px;
+      background: linear-gradient(135deg, rgba(255,255,255,.11), rgba(255,255,255,.055));
+      border: 1px solid rgba(255,255,255,.14);
+      box-shadow: 0 14px 34px rgba(0,0,0,.14);
+    }
+
+    .platform-icon {
+      width: 50px;
+      height: 50px;
+      border-radius: 18px;
+      display: grid;
+      place-items: center;
+      flex: 0 0 auto;
+    }
+
+    .platform-icon svg {
+      width: 31px;
+      height: 31px;
+    }
+
+    .apple-icon {
+      background: linear-gradient(145deg, #ffffff, #9fb2c9);
+    }
+
+    .apple-icon svg path {
+      fill: #07111f;
+    }
+
+    .android-icon {
+      background: linear-gradient(145deg, #35f2a5, #16d9ff);
+    }
+
+    .platform-card strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .platform-card span {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+
+    .notice {
+      margin-top: 18px;
+      padding: 18px;
+      border-radius: 23px;
+      border: 1px solid rgba(53,242,165,0.22);
+      background: rgba(53,242,165,0.08);
+      color: #d9fff0;
+      line-height: 1.65;
+      position: relative;
+      z-index: 1;
+    }
+
+    .video-title-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-radius: 22px;
+      margin-bottom: 15px;
+      background: linear-gradient(135deg, rgba(42,171,238,.18), rgba(138,92,255,.14));
+      border: 1px solid rgba(255,255,255,.13);
+      position: relative;
+      z-index: 1;
+    }
+
+    .video-title-bar h2 {
+      font-size: clamp(22px, 3vw, 32px);
+      letter-spacing: -.8px;
+    }
+
+    .video-title-bar span {
+      color: var(--muted);
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .video-frame {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 26px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: #050b15;
+      overflow: hidden;
+      box-shadow: 0 24px 54px rgba(0,0,0,.28);
+      position: relative;
+      z-index: 1;
+    }
+
+    .video-placeholder {
+      width: 100%;
+      height: 100%;
+      min-height: 315px;
+      background:
+        linear-gradient(rgba(7,17,31,0.48), rgba(7,17,31,0.78)),
+        radial-gradient(circle at center, rgba(42,171,238,0.24), transparent 56%);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 24px;
+    }
+
+    .play {
+      width: 86px;
+      height: 86px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 18px;
+      background: linear-gradient(135deg, #2aabee, #8a5cff);
+      box-shadow: 0 18px 42px rgba(42,171,238,0.30);
+    }
+
+    .video-placeholder h3 {
+      font-size: 25px;
+      margin-bottom: 8px;
+    }
+
+    footer {
+      padding: 34px 0 46px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .footer-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      color: var(--text);
+      font-weight: 950;
+    }
+
+    @media (max-width: 980px) {
+      .hero,
+      .apps-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .packages {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .visual-card {
+        min-height: auto;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .container {
+        width: calc(100% - 24px);
+      }
+
+      .floating-orb {
+        display: none;
+      }
+
+      .nav {
+        padding: 16px 0 10px;
+        flex-direction: row;
+        align-items: center;
+      }
+
+      .brand {
+        gap: 10px;
+      }
+
+      .logo-circle {
+        width: 48px;
+        height: 48px;
+      }
+
+      .brand-text {
+        font-size: 13px;
+        line-height: 1.2;
+      }
+
+      .brand-text span {
+        font-size: 10px;
+        max-width: 170px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .nav-actions .pill {
+        width: 46px;
+        height: 46px;
+        padding: 0;
+        font-size: 0;
+        justify-content: center;
+      }
+
+      .hero {
+        grid-template-columns: 1fr;
+        padding: 28px 0 22px;
+        gap: 18px;
+      }
+
+      .hero-card,
+      .visual-card,
+      .section-card {
+        padding: 20px;
+        border-radius: 24px;
+      }
+
+      h1 {
+        font-size: 42px;
+        line-height: 1;
+        letter-spacing: -1.5px;
+        margin-bottom: 14px;
+      }
+
+      .hero p {
+        font-size: 14px;
+        line-height: 1.7;
+        margin-bottom: 18px;
+      }
+
+      .buttons {
+        gap: 10px;
+      }
+
+      .buttons .btn {
+        width: 100%;
+        padding: 14px 16px;
+        border-radius: 16px;
+        font-size: 14px;
+      }
+
+      .trust-row {
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .trust-chip {
+        font-size: 11px;
+        padding: 8px 9px;
+      }
+
+      .phone {
+        width: 100%;
+        max-width: 285px;
+      }
+
+      .phone-screen {
+        min-height: 340px;
+        padding: 18px;
+      }
+
+      section {
+        padding: 28px 0;
+      }
+
+      .section-title {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        margin-bottom: 16px;
+      }
+
+      .section-title h2 {
+        font-size: 28px;
+        line-height: 1.15;
+      }
+
+      .packages {
+        grid-template-columns: 1fr;
+        gap: 14px;
+      }
+
+      .package-card {
+        padding: 18px;
+        border-radius: 22px;
+        min-height: auto;
+      }
+
+      .package-logo {
+        width: 52px;
+        height: 52px;
+        border-radius: 16px;
+        margin-bottom: 14px;
+      }
+
+      .package-card h3 {
+        font-size: 19px;
+      }
+
+      .package-card p {
+        font-size: 13px;
+        margin-bottom: 12px;
+      }
+
+      .price {
+        font-size: 13px;
+        padding: 8px 11px;
+        margin-top: 4px;
+      }
+
+      .apps-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+
+      .app-item {
+        padding: 13px;
+        border-radius: 18px;
+      }
+
+      .app-logo-img {
+        width: 46px;
+        height: 46px;
+        border-radius: 15px;
+      }
+
+      .platform-badges {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .platform-card {
+        padding: 13px;
+        border-radius: 18px;
+      }
+
+      .platform-icon {
+        width: 46px;
+        height: 46px;
+        border-radius: 15px;
+      }
+
+      .video-title-bar {
+        flex-direction: column;
+        align-items: flex-start;
+        padding: 15px;
+        border-radius: 20px;
+      }
+
+      .video-title-bar h2 {
+        font-size: 25px;
+        line-height: 1.2;
+      }
+
+      .video-title-bar .pill {
+        width: 100%;
+        justify-content: center;
+      }
+
+      .video-frame {
+        aspect-ratio: 16 / 10;
+        border-radius: 20px;
+      }
+
+      .video-placeholder {
+        min-height: 260px;
+        padding: 18px;
+      }
+
+      .play {
+        width: 70px;
+        height: 70px;
+        margin-bottom: 14px;
+      }
+
+      .video-placeholder h3 {
+        font-size: 22px;
+      }
+
+      .video-placeholder .btn {
+        width: 100%;
+        margin-top: 16px !important;
+        padding: 13px 14px;
+        border-radius: 16px;
+        font-size: 14px;
+      }
+
+      footer {
+        padding: 28px 0 36px;
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page-glow"></div>
+  <div class="floating-orb orb-1"></div>
+  <div class="floating-orb orb-2"></div>
+
+  <header class="container nav">
+    <a href="#" class="brand">
+      <div class="logo-circle">
+        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQQD8cC2FlZmHcIGPXnHjGCKuCdByljg31km5eD-B75Gg&s=10" alt="V2RAY AUTO SHOP BOT Logo" />
+      </div>
+      <div class="brand-text">
+        V2RAY AUTO SHOP BOT
+        <span>AIS SIM • V2RAY • VPN Apps</span>
+      </div>
+    </a>
+
+    <div class="nav-actions">
+      <a class="pill" href="https://t.me/topupv2ray_bot" target="_blank" rel="noopener">
+        <span class="telegram-icon">
+          <svg viewBox="0 0 24 24" fill="none">
+            <path d="M21.7 3.3L2.8 10.6C1.5 11.1 1.5 12.9 2.9 13.3L7.7 14.8L9.6 20.6C10 21.8 11.5 22.1 12.3 21.1L15 17.8L19.9 21.4C20.9 22.1 22.3 21.5 22.5 20.2L24 4.8C24.2 3.7 22.8 2.9 21.7 3.3Z" fill="white" transform="scale(.9) translate(-1 -1)" />
+          </svg>
+        </span>
+        Telegram Bot ကိုဖွင့်ရန်
+      </a>
+    </div>
+  </header>
+
+  <main>
+    <section class="container hero">
+      <div class="hero-card">
+        <div class="shine"></div>
+        <div class="eyebrow"><span class="dot"></span> Auto Shop Service Ready</div>
+
+        <h1><span class="gradient-text">V2RAY AUTO</span><br />SHOP BOT</h1>
+
+        <p>
+          AIS SIM package များ၊ V2RAY ဝယ်ယူရန် Telegram Bot လင့်ခ်၊ V2BOX နှင့် NETMOD VPN App အသုံးပြုနိုင်မှုများကို တစ်နေရာတည်းမှာ စနစ်တကျ ကြည့်ရှုနိုင်ရန် ပြင်ဆင်ထားသော premium website ဖြစ်ပါတယ်။
+        </p>
+
+        <div class="buttons">
+          <a class="btn btn-primary" href="https://t.me/topupv2ray_bot" target="_blank" rel="noopener">
+            <span class="telegram-icon">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M21.7 3.3L2.8 10.6C1.5 11.1 1.5 12.9 2.9 13.3L7.7 14.8L9.6 20.6C10 21.8 11.5 22.1 12.3 21.1L15 17.8L19.9 21.4C20.9 22.1 22.3 21.5 22.5 20.2L24 4.8C24.2 3.7 22.8 2.9 21.7 3.3Z" fill="white" transform="scale(.9) translate(-1 -1)" />
+              </svg>
+            </span>
+            V2RAY ဝယ်ရန်နှိပ်ပါ
+          </a>
+
+          <a class="btn btn-secondary" href="#order-video">BOT ORDER တင်နည်းကြည့်ရန်</a>
+        </div>
+
+        <div class="trust-row">
+          <span class="trust-chip">⚡ Fast Order</span>
+          <span class="trust-chip">🛡️ VPN Ready</span>
+          <span class="trust-chip">📱 IOS / Android</span>
+        </div>
+      </div>
+
+      <div class="visual-card">
+        <div class="phone">
+          <div class="phone-screen">
+            <div class="bot-top">
+              <div class="avatar">
+                <svg viewBox="0 0 48 48" width="28" height="28" fill="none">
+                  <rect x="9" y="13" width="30" height="25" rx="10" fill="white"/>
+                  <path d="M18 25H18.1M30 25H30.1" stroke="#07111f" stroke-width="5" stroke-linecap="round"/>
+                  <path d="M24 13V8" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                  <circle cx="24" cy="6" r="3" fill="white"/>
+                </svg>
+              </div>
+              <div class="bot-name">
+                <strong>Auto Shop Bot</strong>
+                <small>Online • Fast Order</small>
+              </div>
+            </div>
+
+            <div class="chat-bubble active">မင်္ဂလာပါ။ V2RAY Auto Shop မှ ကြိုဆိုပါတယ်။</div>
+            <div class="chat-bubble">AIS SIM package များကို စျေးနှုန်းအလိုက် ရွေးချယ်နိုင်ပါတယ်။</div>
+            <div class="chat-bubble">V2BOX / NETMOD VPN အတွက် IOS, Android နှစ်မျိုးလုံး အသုံးပြုနိုင်ပါတယ်။</div>
+
+            <div class="status-row">
+              <div class="stat"><strong>24/7</strong><span>Service</span></div>
+              <div class="stat"><strong>Auto</strong><span>Bot</span></div>
+              <div class="stat"><strong>VPN</strong><span>Ready</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="packages" class="container">
+      <div class="section-title">
+        <div>
+          <div class="eyebrow"><span class="dot"></span> Available Packages</div>
+          <h2>အသုံးပြုနိုင်သော Package များ</h2>
+        </div>
+      </div>
+
+      <div class="packages">
+        <article class="package-card">
+          <img class="package-logo" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRlPWDw9OgQesh9b5HoA1qa6fcpEd_l-JmB5NqQ7EYEyQ&s=10" alt="AIS Logo" />
+          <h3>AIS SIM 64 KBPS</h3>
+          <p>64 KBPS speed package အသုံးပြုလိုသူများအတွက် အခြေခံ package ဖြစ်ပါတယ်။</p>
+          <span class="price">10 စမတ်</span>
+        </article>
+
+        <article class="package-card">
+          <img class="package-logo" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRlPWDw9OgQesh9b5HoA1qa6fcpEd_l-JmB5NqQ7EYEyQ&s=10" alt="AIS Logo" />
+          <h3>AIS SIM Code</h3>
+          <p>Package activation code:</p>
+          <a class="price call-code" href="tel:*777*7067%23">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+              <path d="M6.6 10.8C8.1 13.8 10.2 15.9 13.2 17.4L15.4 15.2C15.7 14.9 16.2 14.8 16.6 14.9C17.8 15.3 19.1 15.5 20.4 15.5C21 15.5 21.5 16 21.5 16.6V20.1C21.5 20.7 21 21.2 20.4 21.2C10.6 21.2 2.8 13.4 2.8 3.6C2.8 3 3.3 2.5 3.9 2.5H7.4C8 2.5 8.5 3 8.5 3.6C8.5 4.9 8.7 6.2 9.1 7.4C9.2 7.8 9.1 8.3 8.8 8.6L6.6 10.8Z" fill="currentColor"/>
+            </svg>
+            *777*7067#
+          </a>
+          <span class="price" style="margin-left:6px;">29 ဘတ်စမတ်</span>
+        </article>
+
+        <article class="package-card">
+          <img class="package-logo" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRlPWDw9OgQesh9b5HoA1qa6fcpEd_l-JmB5NqQ7EYEyQ&s=10" alt="AIS Logo" />
+          <h3>AIS SIM Code</h3>
+          <p>Package activation code:</p>
+          <a class="price call-code" href="tel:*777*7068%23">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+              <path d="M6.6 10.8C8.1 13.8 10.2 15.9 13.2 17.4L15.4 15.2C15.7 14.9 16.2 14.8 16.6 14.9C17.8 15.3 19.1 15.5 20.4 15.5C21 15.5 21.5 16 21.5 16.6V20.1C21.5 20.7 21 21.2 20.4 21.2C10.6 21.2 2.8 13.4 2.8 3.6C2.8 3 3.3 2.5 3.9 2.5H7.4C8 2.5 8.5 3 8.5 3.6C8.5 4.9 8.7 6.2 9.1 7.4C9.2 7.8 9.1 8.3 8.8 8.6L6.6 10.8Z" fill="currentColor"/>
+            </svg>
+            *777*7068#
+          </a>
+          <span class="price" style="margin-left:6px;">34 ဘတ်စမတ်</span>
+        </article>
+
+        <article class="package-card">
+          <div class="icon-box">
+            <svg viewBox="0 0 64 64" fill="none">
+              <path d="M32 7L52 18V34C52 45.5 43.7 54.2 32 58C20.3 54.2 12 45.5 12 34V18L32 7Z" fill="#35F2A5"/>
+              <path d="M24 35L30 41L43 24" stroke="#07111F" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+          <h3>V2RAY</h3>
+          <p>V2RAY service ဝယ်ယူရန် Telegram Bot ကို တိုက်ရိုက်သွားနိုင်ပါတယ်။</p>
+          <a class="price" href="https://t.me/topupv2ray_bot" target="_blank" rel="noopener">
+            <span class="telegram-icon" style="width:20px;height:20px;">
+              <svg viewBox="0 0 24 24" fill="none">
+                <path d="M21.7 3.3L2.8 10.6C1.5 11.1 1.5 12.9 2.9 13.3L7.7 14.8L9.6 20.6C10 21.8 11.5 22.1 12.3 21.1L15 17.8L19.9 21.4C20.9 22.1 22.3 21.5 22.5 20.2L24 4.8C24.2 3.7 22.8 2.9 21.7 3.3Z" fill="white" transform="scale(.9) translate(-1 -1)" />
+              </svg>
+            </span>
+            ဝယ်ရန်နှိပ်ပါ
+          </a>
+        </article>
+      </div>
+    </section>
+
+    <section class="container">
+      <div class="apps-grid">
+        <div class="section-card">
+          <div class="eyebrow"><span class="dot"></span> VPN Apps</div>
+          <h2>V2BOX , NETMOD VPN</h2>
+
+          <div class="app-list">
+            <div class="app-item">
+              <img class="app-logo-img" src="https://play-lh.googleusercontent.com/kVeisXWkT4oRMDsZbFrY7XXJvnxHJ7PnQFE71XCcCWAoeOAg5G3HJRDp4Ro3Xbc3WA" alt="V2BOX Logo" />
+              <div>
+                <strong>V2BOX</strong>
+                <span>IOS / Android အသုံးပြုနိုင်</span>
+              </div>
+            </div>
+
+            <div class="app-item">
+              <img class="app-logo-img" src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcShMEHq-deQo63u2mUaccTLQB_ACKIgaYQ3Yw&s" alt="NETMOD VPN Logo" />
+              <div>
+                <strong>NETMOD VPN</strong>
+                <span>IOS / Android အသုံးပြုနိုင်</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="platform-badges">
+            <div class="platform-card">
+              <div class="platform-icon apple-icon">
+                <svg viewBox="0 0 64 64" fill="none">
+                  <path d="M43.8 33.7C43.7 27.2 49.1 24.1 49.4 23.9C46.4 19.5 41.8 18.9 40.1 18.8C36.2 18.4 32.4 21.1 30.5 21.1C28.5 21.1 25.5 18.9 22.3 19C18.1 19.1 14.2 21.5 12 25.3C7.5 33.1 10.8 44.6 15.2 50.9C17.4 53.9 19.9 57.3 23.2 57.2C26.4 57.1 27.6 55.1 31.5 55.1C35.4 55.1 36.5 57.2 39.9 57.1C43.4 57.1 45.6 54 47.7 50.9C50.2 47.4 51.2 44 51.3 43.8C51.2 43.8 43.9 41 43.8 33.7Z"/>
+                  <path d="M37.6 14.7C39.4 12.5 40.7 9.5 40.3 6.5C37.7 6.6 34.5 8.2 32.7 10.4C31 12.3 29.6 15.4 30.1 18.3C33 18.5 35.8 16.9 37.6 14.7Z"/>
+                </svg>
+              </div>
+              <div>
+                <strong>iOS Ready</strong>
+                <span>iPhone / iPad</span>
+              </div>
+            </div>
+
+            <div class="platform-card">
+              <div class="platform-icon android-icon">
+                <svg viewBox="0 0 64 64" fill="none">
+                  <path d="M20.5 24.5H43.5C46.5 24.5 49 27 49 30V48C49 51 46.5 53.5 43.5 53.5H20.5C17.5 53.5 15 51 15 48V30C15 27 17.5 24.5 20.5 24.5Z" fill="white"/>
+                  <path d="M22 22L17 14M42 22L47 14" stroke="white" stroke-width="4" stroke-linecap="round"/>
+                  <path d="M23 34H23.1M41 34H41.1" stroke="#07111f" stroke-width="5" stroke-linecap="round"/>
+                  <path d="M10 31V45M54 31V45" stroke="white" stroke-width="5" stroke-linecap="round"/>
+                </svg>
+              </div>
+              <div>
+                <strong>Android Ready</strong>
+                <span>Phone / Tablet</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="notice">
+            <strong>Order တင်ရန်:</strong> Telegram icon ပါသော button ကိုနှိပ်ပြီး Bot မှတစ်ဆင့် package ရွေးချယ်ဝယ်ယူနိုင်ပါတယ်။
+          </div>
+        </div>
+
+        <div id="order-video" class="section-card">
+          <div class="video-title-bar">
+            <div>
+              <span>Video Tutorial</span>
+              <h2>BOT ORDER တင်နည်းကြည့်ရန်</h2>
+            </div>
+
+            <a class="pill" href="https://t.me/topupv2ray_bot" target="_blank" rel="noopener">
+              <span class="telegram-icon">
+                <svg viewBox="0 0 24 24" fill="none">
+                  <path d="M21.7 3.3L2.8 10.6C1.5 11.1 1.5 12.9 2.9 13.3L7.7 14.8L9.6 20.6C10 21.8 11.5 22.1 12.3 21.1L15 17.8L19.9 21.4C20.9 22.1 22.3 21.5 22.5 20.2L24 4.8C24.2 3.7 22.8 2.9 21.7 3.3Z" fill="white" transform="scale(.9) translate(-1 -1)" />
+                </svg>
+              </span>
+              Open Bot
+            </a>
+          </div>
+
+          <div class="video-frame">
+            <div class="video-placeholder">
+              <div>
+                <div class="play">
+                  <svg viewBox="0 0 64 64" width="38" height="38" fill="none">
+                    <path d="M25 18L48 32L25 46V18Z" fill="white"/>
+                  </svg>
+                </div>
+
+                <h3>BOT ORDER တင်နည်း Video</h3>
+
+                <a class="btn btn-primary" href="https://www.facebook.com/share/v/1B3PHERra3/" target="_blank" rel="noopener" style="margin-top:18px;">
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none">
+                    <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06C2 17.08 5.66 21.25 10.44 22v-7.03H7.9v-2.91h2.54V9.85c0-2.52 1.49-3.91 3.77-3.91 1.09 0 2.23.2 2.23.2v2.47h-1.25c-1.24 0-1.63.78-1.63 1.57v1.88h2.78l-.44 2.91h-2.34V22C18.34 21.25 22 17.08 22 12.06Z" fill="white"/>
+                  </svg>
+                  Facebook မှာ VDO ကြည့်ရန်
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="container">
+    <div class="footer-brand">
+      <span class="logo-circle" style="width:38px;height:38px;box-shadow:none;">
+        <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQQD8cC2FlZmHcIGPXnHjGCKuCdByljg31km5eD-B75Gg&s=10" alt="V2RAY AUTO SHOP BOT Logo" />
+      </span>
+      V2RAY AUTO SHOP BOT
+    </div>
+    <p>© 2026 V2RAY AUTO SHOP BOT. All rights reserved.</p>
+  </footer>
+</body>
+</html>
